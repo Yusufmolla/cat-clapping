@@ -1,3 +1,5 @@
+import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask
+
 plugins {
     id("java")
     id("org.jetbrains.intellij.platform") version "2.10.4"
@@ -23,6 +25,7 @@ dependencies {
     intellijPlatform {
         pycharm("2025.3")
         bundledPlugin("org.jetbrains.plugins.terminal")
+        pluginVerifier()
     }
 }
 
@@ -34,6 +37,16 @@ intellijPlatform {
         ideaVersion {
             sinceBuild = providers.gradleProperty("platformSinceBuild")
         }
+    }
+
+    pluginVerification {
+        ides {
+            recommended()
+        }
+        failureLevel = listOf(
+            VerifyPluginTask.FailureLevel.COMPATIBILITY_PROBLEMS,
+            VerifyPluginTask.FailureLevel.INVALID_PLUGIN
+        )
     }
 
     publishing {
