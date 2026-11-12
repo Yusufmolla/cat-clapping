@@ -48,14 +48,18 @@ public final class CelebrationService implements Disposable {
             lastShownMs.set(now);
         }
 
-        ApplicationManager.getApplication().invokeLater(() -> {
-            if (project.isDisposed()) {
-                return;
-            }
-            boolean shown = CatOverlay.show(project);
-            if (shown && CatClappingSettings.getInstance().isSoundEnabled()) {
-                SoundPlayer.play();
-            }
+        // Load the GIF and open the audio line off the EDT, then start both together.
+        ApplicationManager.getApplication().executeOnPooledThread(() -> {
+            CatAnimation.rawSize();
+            SoundPlayer.Playback playback = CatClappingSettings.getInstance().isSoundEnabled()
+                    ? SoundPlayer.prepare()
+                    : null;
+            ApplicationManager.getApplication().invokeLater(() -> {
+                boolean shown = !project.isDisposed() && CatOverlay.show(project, playback);
+                if (!shown && playback != null) {
+                    playback.discard();
+                }
+            });
         });
     }
 

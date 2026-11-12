@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>com.catclapping.jetbrains</id>
     <name>Cat Clapping</name>
-    <version>0.1.4</version>
+    <version>0.1.5</version>
     <vendor email="mail@yusufmolla.de" url="https://github.com/Yusufmolla/cat-clapping">Yusuf Molla</vendor>
 
     <description><![CDATA[
@@ -16,6 +16,12 @@
     ]]></description>
 
     <change-notes><![CDATA[
+    <h3>0.1.5</h3>
+    <ul>
+      <li>Synchronized cat GIF frames directly to audio playback time using a custom frame-by-frame GIF decoder (<code>CatAnimation</code>).</li>
+      <li>Pre-warms audio and initial frames in the background so visual animation and sound start together.</li>
+      <li>Improved HiDPI/Retina rendering sharpness for the cat overlay.</li>
+    </ul>
     <h3>0.1.4</h3>
     <ul>
       <li>Fixed Java Sound playback closing early before audio finished playing.</li>

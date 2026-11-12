@@ -20,41 +20,96 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Plays the bundled celebration WAV sound across macOS, Linux, and Windows.
+ * <p>
+ * Use {@link #prepare()} off the EDT to open the audio line in advance, then {@link Playback#start()}
+ * at the exact moment the animation starts. {@link Playback#positionMs()} reports how much audio has
+ * actually been played so the animation can follow the sound.
  */
 public final class SoundPlayer {
 
     private static final Logger LOG = Logger.getInstance(SoundPlayer.class);
     private static final String AUDIO_RESOURCE = "/media/cat-clapping.wav";
+    /** Rough start-up latency of external players such as afplay. */
+    private static final long OS_PLAYER_LATENCY_MS = 80L;
     private static volatile Path cachedTempAudioFile;
 
     private SoundPlayer() {
     }
 
+    /** Fire-and-forget playback (used when no animation is shown). */
     public static void play() {
-        double volume = CatClappingSettings.getInstance().getVolumePercent() / 100.0;
-        if (volume <= 0.0) {
-            return;
-        }
         Thread thread = new Thread(() -> {
-            if (!playViaJavaSound(volume)) {
-                playViaOsFallback(volume);
+            Playback playback = prepare();
+            if (playback != null) {
+                playback.start();
             }
         }, "cat-clapping-audio");
         thread.setDaemon(true);
         thread.start();
     }
 
-    private static boolean playViaJavaSound(double volume) {
-        try (InputStream raw = SoundPlayer.class.getResourceAsStream(AUDIO_RESOURCE)) {
-            if (raw == null) {
-                LOG.warn("Audio resource not found: " + AUDIO_RESOURCE);
-                return false;
+    /**
+     * Opens the audio line so playback can start without delay. May block; call off the EDT.
+     *
+     * @return a ready playback, or null when the volume is 0.
+     */
+    public static Playback prepare() {
+        double volume = CatClappingSettings.getInstance().getVolumePercent() / 100.0;
+        if (volume <= 0.0) {
+            return null;
+        }
+        Clip clip = openClip(volume);
+        return new Playback(clip, volume);
+    }
+
+    public static final class Playback {
+        private final Clip clip;
+        private final double volume;
+        private volatile long startNanos = -1L;
+
+        private Playback(Clip clip, double volume) {
+            this.clip = clip;
+            this.volume = volume;
+        }
+
+        /** Starts playback asynchronously. */
+        public void start() {
+            if (startNanos >= 0) {
+                return;
             }
-            try (BufferedInputStream buffered = new BufferedInputStream(raw);
-                 AudioInputStream audioStream = AudioSystem.getAudioInputStream(buffered)) {
-                Clip clip = AudioSystem.getClip();
-                clip.open(audioStream);
-                applyVolume(clip, volume);
+            startNanos = System.nanoTime();
+            Thread thread = new Thread(clip != null ? this::runClip : () -> playViaOsFallback(volume),
+                    "cat-clapping-audio");
+            thread.setDaemon(true);
+            thread.start();
+        }
+
+        /** Milliseconds of audio played so far, or -1 if not started. */
+        public long positionMs() {
+            if (startNanos < 0) {
+                return -1L;
+            }
+            long wallMs = (System.nanoTime() - startNanos) / 1_000_000L;
+            if (clip == null) {
+                return Math.max(wallMs - OS_PLAYER_LATENCY_MS, 0L);
+            }
+            long clipMs = clip.getMicrosecondPosition() / 1000L;
+            if (clipMs > 0) {
+                return clipMs;
+            }
+            // Safety net if the audio device never reports progress.
+            return Math.max(wallMs - 500L, 0L);
+        }
+
+        /** Releases the audio line if playback was never started. */
+        public void discard() {
+            if (startNanos < 0 && clip != null) {
+                clip.close();
+            }
+        }
+
+        private void runClip() {
+            try {
                 CountDownLatch finished = new CountDownLatch(1);
                 clip.addLineListener(event -> {
                     if (event.getType() == LineEvent.Type.STOP || event.getType() == LineEvent.Type.CLOSE) {
@@ -66,12 +121,30 @@ public final class SoundPlayer {
                 long lengthMs = Math.max(clip.getMicrosecondLength() / 1000L, 0L);
                 clip.start();
                 finished.await(lengthMs + 2000L, TimeUnit.MILLISECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } finally {
                 clip.close();
-                return true;
+            }
+        }
+    }
+
+    private static Clip openClip(double volume) {
+        try (InputStream raw = SoundPlayer.class.getResourceAsStream(AUDIO_RESOURCE)) {
+            if (raw == null) {
+                LOG.warn("Audio resource not found: " + AUDIO_RESOURCE);
+                return null;
+            }
+            try (BufferedInputStream buffered = new BufferedInputStream(raw);
+                 AudioInputStream audioStream = AudioSystem.getAudioInputStream(buffered)) {
+                Clip clip = AudioSystem.getClip();
+                clip.open(audioStream);
+                applyVolume(clip, volume);
+                return clip;
             }
         } catch (Exception e) {
-            LOG.debug("Java Sound playback failed, trying OS fallback", e);
-            return false;
+            LOG.debug("Java Sound unavailable, using OS fallback", e);
+            return null;
         }
     }
 
