@@ -2,12 +2,28 @@
     <id>com.catclapping.jetbrains</id>
     <name>Cat Clapping</name>
     <version>0.1.0</version>
-    <vendor url="https://github.com/yusufmolla/cat-clapping">Yusuf Molla</vendor>
+    <vendor email="mail@yusufmolla.de" url="https://github.com/Yusufmolla/cat-clapping">Yusuf Molla</vendor>
 
     <description><![CDATA[
-    Celebrate successful builds, runs, tests, debug sessions, and terminal commands with a clapping cat.
-    Works across JetBrains IDEs (PyCharm, CLion, IntelliJ IDEA, WebStorm, etc.) on macOS, Linux, and Windows.
+    <p>Celebrate successful builds, runs, tests, debug sessions, and terminal commands with an animated clapping cat and celebration sound directly inside your IDE.</p>
+    <p><b>Supported triggers:</b></p>
+    <ul>
+      <li><b>Run, Debug &amp; Test configurations</b> exiting with code 0 across PyCharm, CLion, IntelliJ IDEA, WebStorm, GoLand, and other IntelliJ-based IDEs.</li>
+      <li><b>IDE Builds</b> (e.g. CMake, Make, Gradle, Maven) finishing successfully.</li>
+      <li><b>Integrated Terminal commands</b> via shell integration (Reworked &amp; Block Terminal), including Python (<code>python</code>, <code>pytest</code>, <code>uv run</code>, <code>poetry run</code>), C/C++ (<code>gcc</code>, <code>cc</code>, <code>clang</code>, <code>g++</code>, <code>clang++</code>, <code>cl.exe</code>, <code>cmake</code>, <code>make</code>, <code>ninja</code>, and compiled executables on macOS, Linux, and Windows), Node.js, Rust, Go, .NET, and Java.</li>
+    </ul>
+    <p>Configure enabled commands, toggle audio, or preview the animation anytime under <b>Settings &rarr; Tools &rarr; Cat Clapping</b>.</p>
     ]]></description>
+
+    <change-notes><![CDATA[
+    <h3>0.1.0</h3>
+    <ul>
+      <li>Initial JetBrains Platform release for PyCharm, CLion, IntelliJ IDEA, and sibling IDEs.</li>
+      <li>Added Run/Debug/Test, BuildView, and Terminal shell-integration triggers.</li>
+      <li>Added support for Python, <code>uv</code>, and C/C++ commands across macOS, Linux, and Windows.</li>
+      <li>Added Settings panel under <b>Tools &rarr; Cat Clapping</b> with command filters and test button.</li>
+    </ul>
+    ]]></change-notes>
 
     <idea-version since-build="243"/>
 

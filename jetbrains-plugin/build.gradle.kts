@@ -35,6 +35,10 @@ intellijPlatform {
             sinceBuild = providers.gradleProperty("platformSinceBuild")
         }
     }
+
+    publishing {
+        token = providers.environmentVariable("PUBLISH_TOKEN")
+    }
 }
 
 val runCommandMatcherTest by tasks.registering(JavaExec::class) {
