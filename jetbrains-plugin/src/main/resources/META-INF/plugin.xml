@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>de.yusufmolla.catclapping</id>
     <name>Cat Clapping</name>
-    <version>0.1.6</version>
+    <version>0.1.7</version>
     <vendor url="https://github.com/Yusufmolla/cat-clapping">YusufMolla</vendor>
 
     <description><![CDATA[
@@ -16,6 +16,10 @@
     ]]></description>
 
     <change-notes><![CDATA[
+    <h3>0.1.7</h3>
+    <ul>
+      <li>Fixed EDT threading violation during project startup by dispatching startup hook registration via <code>invokeLater</code>.</li>
+    </ul>
     <h3>0.1.6</h3>
     <ul>
       <li>Terminal integration now uses only the public Terminal API (IDE 2025.3+); removed internal Block Terminal APIs.</li>

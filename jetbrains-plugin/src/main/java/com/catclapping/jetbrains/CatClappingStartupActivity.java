@@ -10,6 +10,7 @@ import com.intellij.execution.configurations.RunProfile;
 import com.intellij.execution.executors.DefaultDebugExecutor;
 import com.intellij.execution.process.ProcessHandler;
 import com.intellij.execution.runners.ExecutionEnvironment;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.startup.ProjectActivity;
@@ -27,11 +28,15 @@ public final class CatClappingStartupActivity implements ProjectActivity {
 
     @Override
     public @Nullable Object execute(@NotNull Project project, @NotNull Continuation<? super Unit> continuation) {
-        registerListeners(project);
+        // ProjectActivity runs on a background dispatcher; BuildViewManager/UI listener setup should run on EDT.
+        ApplicationManager.getApplication().invokeLater(() -> registerListeners(project));
         return Unit.INSTANCE;
     }
 
     private void registerListeners(@NotNull Project project) {
+        if (project.isDisposed()) {
+            return;
+        }
         CelebrationService celebrationService = CelebrationService.getInstance(project);
 
         // 1. Run / Debug / Test configurations across PyCharm, CLion, IntelliJ, etc.

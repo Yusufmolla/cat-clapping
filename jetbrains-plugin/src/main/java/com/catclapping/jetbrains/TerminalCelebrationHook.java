@@ -1,6 +1,7 @@
 package com.catclapping.jetbrains;
 
 import com.intellij.openapi.Disposable;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.startup.ProjectActivity;
@@ -37,7 +38,13 @@ public final class TerminalCelebrationHook implements ProjectActivity {
 
     @Override
     public @Nullable Object execute(@NotNull Project project, @NotNull Continuation<? super Unit> continuation) {
-        hookReworkedTerminal(project, CelebrationService.getInstance(project));
+        CelebrationService celebrationService = CelebrationService.getInstance(project);
+        // ProjectActivity runs on a coroutine background thread; TerminalToolWindowTabsManager requires EDT.
+        ApplicationManager.getApplication().invokeLater(() -> {
+            if (!celebrationService.isDisposed()) {
+                hookReworkedTerminal(project, celebrationService);
+            }
+        });
         return Unit.INSTANCE;
     }
 
