@@ -16,7 +16,7 @@ This repository contains both the **VS Code extension** and the **JetBrains IDE 
 - Animated clapping cat overlay at the top center of the active editor + celebration sound
 - Detects successful **Run / Debug / Test** sessions (`ExecutionManager.EXECUTION_TOPIC`)
 - Detects successful **IDE Builds** (`BuildViewManager`, e.g. CMake / Make / Gradle)
-- Detects successful **Terminal commands** via JetBrains shell integration (Reworked & Block Terminal), including:
+- Detects successful **Terminal commands** via JetBrains shell integration (new Terminal, IDE 2025.3+), including:
   - **Python:** `python`, `python3`, `py`, `pytest`, `uv run`, `uvx`, `uv build`, `poetry run`, `pdm run`, `pipenv run`
   - **C / C++ (macOS, Linux, Windows):** `gcc`, `cc`, `clang`, `g++`, `clang++`, `cl` / `cl.exe`, `cmake`, `ctest`, `make`, `mingw32-make`, `nmake`, `ninja`, `meson`, plus direct executables (`./main`, `./a.out`, `.\program.exe`, `./program.exe`, `program.exe`)
   - **Other runtimes/build tools:** `node`, `npm`, `npx`, `yarn`, `pnpm`, `cargo`, `go`, `dotnet`, `mvn`, `gradle`, `java`, `kotlin`, `swift`, etc.

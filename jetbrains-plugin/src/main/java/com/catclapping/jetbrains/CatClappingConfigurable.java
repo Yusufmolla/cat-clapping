@@ -37,7 +37,7 @@ public final class CatClappingConfigurable implements SearchableConfigurable {
 
     @Override
     public @NotNull String getId() {
-        return "com.catclapping.jetbrains.settings";
+        return "de.yusufmolla.catclapping.settings";
     }
 
     @Override

@@ -32,7 +32,7 @@ dependencies {
 
 intellijPlatform {
     pluginConfiguration {
-        id = "com.catclapping.jetbrains"
+        id = "de.yusufmolla.catclapping"
         name = "Cat Clapping"
         version = providers.gradleProperty("pluginVersion")
         ideaVersion {

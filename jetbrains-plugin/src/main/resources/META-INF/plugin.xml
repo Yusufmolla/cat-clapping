@@ -1,8 +1,8 @@
 <idea-plugin>
-    <id>com.catclapping.jetbrains</id>
+    <id>de.yusufmolla.catclapping</id>
     <name>Cat Clapping</name>
-    <version>0.1.5</version>
-    <vendor email="mail@yusufmolla.de" url="https://github.com/Yusufmolla/cat-clapping">Yusuf Molla</vendor>
+    <version>0.1.6</version>
+    <vendor url="https://github.com/Yusufmolla/cat-clapping">YusufMolla</vendor>
 
     <description><![CDATA[
     <p>Celebrate successful builds, runs, tests, debug sessions, and terminal commands with an animated clapping cat and celebration sound directly inside your IDE.</p>
@@ -10,12 +10,18 @@
     <ul>
       <li><b>Run, Debug &amp; Test configurations</b> exiting with code 0 across PyCharm, CLion, IntelliJ IDEA, WebStorm, GoLand, and other IntelliJ-based IDEs.</li>
       <li><b>IDE Builds</b> (e.g. CMake, Make, Gradle, Maven) finishing successfully.</li>
-      <li><b>Integrated Terminal commands</b> via shell integration (Reworked &amp; Block Terminal), including Python (<code>python</code>, <code>pytest</code>, <code>uv run</code>, <code>poetry run</code>), C/C++ (<code>gcc</code>, <code>cc</code>, <code>clang</code>, <code>g++</code>, <code>clang++</code>, <code>cl.exe</code>, <code>cmake</code>, <code>make</code>, <code>ninja</code>, and compiled executables on macOS, Linux, and Windows), Node.js, Rust, Go, .NET, and Java.</li>
+      <li><b>Integrated Terminal commands</b> via shell integration (new Terminal), including Python (<code>python</code>, <code>pytest</code>, <code>uv run</code>, <code>poetry run</code>), C/C++ (<code>gcc</code>, <code>cc</code>, <code>clang</code>, <code>g++</code>, <code>clang++</code>, <code>cl.exe</code>, <code>cmake</code>, <code>make</code>, <code>ninja</code>, and compiled executables on macOS, Linux, and Windows), Node.js, Rust, Go, .NET, and Java.</li>
     </ul>
     <p>Configure enabled commands, toggle audio, or preview the animation anytime under <b>Settings &rarr; Tools &rarr; Cat Clapping</b>.</p>
     ]]></description>
 
     <change-notes><![CDATA[
+    <h3>0.1.6</h3>
+    <ul>
+      <li>Terminal integration now uses only the public Terminal API (IDE 2025.3+); removed internal Block Terminal APIs.</li>
+      <li>Startup listeners migrated to <code>ProjectActivity</code>.</li>
+      <li>Minimum supported IDE version is now 2025.3.</li>
+    </ul>
     <h3>0.1.5</h3>
     <ul>
       <li>Synchronized cat GIF frames directly to audio playback time using a custom frame-by-frame GIF decoder (<code>CatAnimation</code>).</li>
@@ -35,7 +41,7 @@
     </ul>
     ]]></change-notes>
 
-    <idea-version since-build="243"/>
+    <idea-version since-build="253"/>
 
     <depends>com.intellij.modules.platform</depends>
     <depends optional="true" config-file="catclapping-terminal.xml">org.jetbrains.plugins.terminal</depends>
@@ -45,7 +51,7 @@
         <applicationConfigurable
                 parentId="tools"
                 instance="com.catclapping.jetbrains.CatClappingConfigurable"
-                id="com.catclapping.jetbrains.settings"
+                id="de.yusufmolla.catclapping.settings"
                 displayName="Cat Clapping"/>
         <projectService serviceImplementation="com.catclapping.jetbrains.CelebrationService"/>
         <postStartupActivity implementation="com.catclapping.jetbrains.CatClappingStartupActivity"/>

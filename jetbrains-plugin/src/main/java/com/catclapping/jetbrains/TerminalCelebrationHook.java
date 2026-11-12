@@ -1,24 +1,20 @@
 package com.catclapping.jetbrains;
 
-import com.intellij.ide.DataManager;
 import com.intellij.openapi.Disposable;
-import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.startup.StartupActivity;
+import com.intellij.openapi.startup.ProjectActivity;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.terminal.frontend.toolwindow.TerminalTabsManagerListener;
 import com.intellij.terminal.frontend.toolwindow.TerminalToolWindowTab;
 import com.intellij.terminal.frontend.toolwindow.TerminalToolWindowTabsManager;
 import com.intellij.terminal.frontend.view.TerminalView;
-import com.intellij.terminal.ui.TerminalWidget;
 import kotlinx.coroutines.Deferred;
 import kotlinx.coroutines.future.FutureKt;
+import kotlin.Unit;
+import kotlin.coroutines.Continuation;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.plugins.terminal.TerminalToolWindowManager;
-import org.jetbrains.plugins.terminal.block.session.BlockTerminalSession;
-import org.jetbrains.plugins.terminal.block.session.CommandFinishedEvent;
-import org.jetbrains.plugins.terminal.block.session.ShellCommandListener;
+import org.jetbrains.annotations.Nullable;
 import org.jetbrains.plugins.terminal.view.shellIntegration.TerminalCommandBlock;
 import org.jetbrains.plugins.terminal.view.shellIntegration.TerminalCommandExecutionListener;
 import org.jetbrains.plugins.terminal.view.shellIntegration.TerminalCommandFinishedEvent;
@@ -31,19 +27,18 @@ import java.util.WeakHashMap;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Hooks JetBrains Terminal shell-integration events (Reworked Terminal & Block Terminal).
+ * Hooks shell-integration command events of the (reworked) JetBrains Terminal via its public API.
  */
-public final class TerminalCelebrationHook implements StartupActivity.DumbAware {
+public final class TerminalCelebrationHook implements ProjectActivity {
 
     private static final Logger LOG = Logger.getInstance(TerminalCelebrationHook.class);
 
     private final Set<Object> attachedViews = Collections.newSetFromMap(new WeakHashMap<>());
 
     @Override
-    public void runActivity(@NotNull Project project) {
-        CelebrationService celebrationService = CelebrationService.getInstance(project);
-        hookReworkedTerminal(project, celebrationService);
-        hookBlockTerminal(project, celebrationService);
+    public @Nullable Object execute(@NotNull Project project, @NotNull Continuation<? super Unit> continuation) {
+        hookReworkedTerminal(project, CelebrationService.getInstance(project));
+        return Unit.INSTANCE;
     }
 
     private void hookReworkedTerminal(Project project, CelebrationService celebrationService) {
@@ -95,49 +90,6 @@ public final class TerminalCelebrationHook implements StartupActivity.DumbAware 
         } catch (LinkageError | RuntimeException e) {
             LOG.debug("Failed to attach shell integration listener to TerminalView", e);
         }
-    }
-
-    private void hookBlockTerminal(Project project, CelebrationService celebrationService) {
-        try {
-            TerminalToolWindowManager manager = TerminalToolWindowManager.getInstance(project);
-            for (TerminalWidget widget : manager.getTerminalWidgets()) {
-                attachToBlockWidget(widget, celebrationService);
-            }
-            manager.addNewTerminalSetupHandler(
-                    widget -> attachToBlockWidget(widget, celebrationService),
-                    celebrationService);
-        } catch (LinkageError | RuntimeException e) {
-            LOG.debug("Block terminal hook not available", e);
-        }
-    }
-
-    private void attachToBlockWidget(TerminalWidget widget, CelebrationService celebrationService) {
-        if (widget == null) {
-            return;
-        }
-        ApplicationManager.getApplication().invokeLater(() -> {
-            if (celebrationService.isDisposed()) {
-                return;
-            }
-            try {
-                BlockTerminalSession session = DataManager.getInstance()
-                        .getDataContext(widget.getComponent())
-                        .getData(BlockTerminalSession.Companion.getDATA_KEY());
-                if (session == null || !attachedViews.add(session)) {
-                    return;
-                }
-                session.addCommandListener(new ShellCommandListener() {
-                    @Override
-                    public void commandFinished(@NotNull CommandFinishedEvent event) {
-                        if (event.getExitCode() == 0) {
-                            onTerminalCommandSucceeded(event.getCommand(), celebrationService);
-                        }
-                    }
-                }, celebrationService);
-            } catch (LinkageError | RuntimeException e) {
-                LOG.debug("Failed to attach BlockTerminalSession listener", e);
-            }
-        });
     }
 
     private static void onTerminalCommandSucceeded(String command, CelebrationService celebrationService) {
