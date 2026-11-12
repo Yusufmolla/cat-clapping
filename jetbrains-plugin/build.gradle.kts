@@ -1,8 +1,6 @@
-import org.jetbrains.intellij.platform.gradle.TestFrameworkType
-
 plugins {
     id("java")
-    id("org.jetbrains.intellij.platform") version "2.5.0"
+    id("org.jetbrains.intellij.platform") version "2.10.4"
 }
 
 group = providers.gradleProperty("pluginGroup").get()
@@ -23,11 +21,9 @@ java {
 
 dependencies {
     intellijPlatform {
-        pycharmCommunity("2025.1")
+        pycharm("2025.3")
         bundledPlugin("org.jetbrains.plugins.terminal")
-        testFramework(TestFrameworkType.Platform)
     }
-    testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
 }
 
 intellijPlatform {
@@ -41,8 +37,14 @@ intellijPlatform {
     }
 }
 
-tasks {
-    test {
-        useJUnitPlatform()
-    }
+val runCommandMatcherTest by tasks.registering(JavaExec::class) {
+    group = "verification"
+    description = "Runs CommandMatcherTest assertions."
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("com.catclapping.jetbrains.CommandMatcherTest")
+    enableAssertions = true
+}
+
+tasks.named("check") {
+    dependsOn(runCommandMatcherTest)
 }

@@ -22,16 +22,25 @@ This repository contains both the **VS Code extension** and the **JetBrains IDE 
   - **Other runtimes/build tools:** `node`, `npm`, `npx`, `yarn`, `pnpm`, `cargo`, `go`, `dotnet`, `mvn`, `gradle`, `java`, `kotlin`, `swift`, etc.
 - Configurable under **Settings → Tools → Cat Clapping** (including a **Test Cat Clapping** button)
 
-### Build
+### Build & Release
 
 With Gradle:
 
 ```bash
 cd jetbrains-plugin
-gradle buildPlugin
+gradle check buildPlugin
 ```
 
 Or install the generated `jetbrains-plugin/build/distributions/cat-clapping-jetbrains-0.1.0.zip` in PyCharm/CLion via **Settings → Plugins → ⚙️ → Install Plugin from Disk...**.
+
+#### GitHub Release Workflow (no auto-build on `main`)
+
+The workflow [.github/workflows/release.yml](.github/workflows/release.yml) only runs on version tags (`v*`) or manually via **Actions → Build & Release → Run workflow**:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
 
 ## License
 
