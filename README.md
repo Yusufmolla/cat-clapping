@@ -8,7 +8,7 @@ This repository contains both the **VS Code extension** and the **JetBrains IDE 
 
 ![Cat Clapping Demo in PyCharm](docs/media/cat-clapping-demo.gif)
 
-![Cat Clapping Settings](docs/media/screenshot-settings.jpg)
+![Cat Clapping Settings](docs/media/screenshot-settings.png)
 
 ## Repository Structure
 
