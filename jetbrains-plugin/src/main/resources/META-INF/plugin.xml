@@ -1,0 +1,27 @@
+<idea-plugin>
+    <id>com.catclapping.jetbrains</id>
+    <name>Cat Clapping</name>
+    <version>0.1.0</version>
+    <vendor url="https://github.com/yusufmolla/cat-clapping">Yusuf Molla</vendor>
+
+    <description><![CDATA[
+    Celebrate successful builds, runs, tests, debug sessions, and terminal commands with a clapping cat.
+    Works across JetBrains IDEs (PyCharm, CLion, IntelliJ IDEA, WebStorm, etc.) on macOS, Linux, and Windows.
+    ]]></description>
+
+    <idea-version since-build="243"/>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends optional="true" config-file="catclapping-terminal.xml">org.jetbrains.plugins.terminal</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <applicationService serviceImplementation="com.catclapping.jetbrains.CatClappingSettings"/>
+        <applicationConfigurable
+                parentId="tools"
+                instance="com.catclapping.jetbrains.CatClappingConfigurable"
+                id="com.catclapping.jetbrains.settings"
+                displayName="Cat Clapping"/>
+        <projectService serviceImplementation="com.catclapping.jetbrains.CelebrationService"/>
+        <postStartupActivity implementation="com.catclapping.jetbrains.CatClappingStartupActivity"/>
+    </extensions>
+</idea-plugin>

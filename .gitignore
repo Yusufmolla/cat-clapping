@@ -1,0 +1,8 @@
+.DS_Store
+**/.DS_Store
+node_modules/
+jetbrains-plugin/build/
+jetbrains-plugin/.gradle/
+jetbrains-plugin/.idea/
+*.iml
+extension/media/test1.gif
