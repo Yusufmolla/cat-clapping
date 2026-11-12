@@ -21,7 +21,14 @@ public final class CatClappingSettings implements PersistentStateComponent<CatCl
     public static final class State {
         public List<String> enabledCommands = new ArrayList<>(List.of("*"));
         public boolean soundEnabled = true;
+        public int volumePercent = DEFAULT_VOLUME_PERCENT;
+        public int catSizePx = DEFAULT_CAT_SIZE_PX;
     }
+
+    public static final int DEFAULT_VOLUME_PERCENT = 80;
+    public static final int DEFAULT_CAT_SIZE_PX = 320;
+    public static final int MIN_CAT_SIZE_PX = 80;
+    public static final int MAX_CAT_SIZE_PX = 900;
 
     private State state = new State();
 
@@ -56,5 +63,25 @@ public final class CatClappingSettings implements PersistentStateComponent<CatCl
 
     public void setSoundEnabled(boolean soundEnabled) {
         state.soundEnabled = soundEnabled;
+    }
+
+    public int getVolumePercent() {
+        return clamp(state.volumePercent, 0, 100);
+    }
+
+    public void setVolumePercent(int volumePercent) {
+        state.volumePercent = clamp(volumePercent, 0, 100);
+    }
+
+    public int getCatSizePx() {
+        return clamp(state.catSizePx, MIN_CAT_SIZE_PX, MAX_CAT_SIZE_PX);
+    }
+
+    public void setCatSizePx(int catSizePx) {
+        state.catSizePx = clamp(catSizePx, MIN_CAT_SIZE_PX, MAX_CAT_SIZE_PX);
+    }
+
+    private static int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
     }
 }

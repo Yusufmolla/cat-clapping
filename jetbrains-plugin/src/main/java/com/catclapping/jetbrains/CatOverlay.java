@@ -30,7 +30,6 @@ public final class CatOverlay {
     private static final Logger LOG = Logger.getInstance(CatOverlay.class);
     private static final String GIF_RESOURCE = "/media/cat-clapping.gif";
     private static final int DISPLAY_DURATION_MS = 7000;
-    private static final int MAX_SIZE_PX = 84;
     private static final int TOP_MARGIN_PX = 8;
 
     private CatOverlay() {
@@ -54,8 +53,12 @@ public final class CatOverlay {
         ImageIcon icon = new ImageIcon(gifUrl);
         int rawW = Math.max(icon.getIconWidth(), 1);
         int rawH = Math.max(icon.getIconHeight(), 1);
-        double scale = Math.min((double) MAX_SIZE_PX / rawW, (double) MAX_SIZE_PX / rawH);
-        int targetW = Math.max((int) Math.round(rawW * scale), 32);
+        JLayeredPane layeredPane = rootPane.getLayeredPane();
+        int desiredH = CatClappingSettings.getInstance().getCatSizePx();
+        int availableH = layeredPane.getHeight() > 0 ? layeredPane.getHeight() - 2 * TOP_MARGIN_PX : desiredH;
+        int maxH = Math.max(Math.min(desiredH, availableH), 32);
+        double scale = (double) maxH / rawH;
+        int targetW = Math.max((int) Math.round(rawW * scale), 16);
         int targetH = Math.max((int) Math.round(rawH * scale), 32);
 
         JComponent overlay = new JComponent() {
@@ -74,9 +77,8 @@ public final class CatOverlay {
         };
         overlay.setOpaque(false);
 
-        JLayeredPane layeredPane = rootPane.getLayeredPane();
         Component anchor = findAnchorComponent(project, layeredPane);
-        Point topCenter = computeTopCenter(anchor, layeredPane, targetW);
+        Point topCenter = computeTopCenter(anchor, layeredPane, targetW, targetH);
         overlay.setBounds(topCenter.x, topCenter.y, targetW, targetH);
 
         layeredPane.add(overlay, JLayeredPane.POPUP_LAYER);
@@ -106,14 +108,14 @@ public final class CatOverlay {
         return fallback;
     }
 
-    private static Point computeTopCenter(Component anchor, JLayeredPane layeredPane, int width) {
+    private static Point computeTopCenter(Component anchor, JLayeredPane layeredPane, int width, int height) {
         if (anchor == layeredPane || !anchor.isShowing()) {
             int x = Math.max((layeredPane.getWidth() - width) / 2, 0);
             return new Point(x, TOP_MARGIN_PX);
         }
         Point point = SwingUtilities.convertPoint(anchor, (anchor.getWidth() - width) / 2, TOP_MARGIN_PX, layeredPane);
         int clampedX = Math.max(0, Math.min(point.x, Math.max(layeredPane.getWidth() - width, 0)));
-        int clampedY = Math.max(0, Math.min(point.y, Math.max(layeredPane.getHeight() - MAX_SIZE_PX, 0)));
+        int clampedY = Math.max(0, Math.min(point.y, Math.max(layeredPane.getHeight() - height, 0)));
         return new Point(clampedX, clampedY);
     }
 }
