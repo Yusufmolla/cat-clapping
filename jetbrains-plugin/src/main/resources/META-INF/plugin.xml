@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>com.catclapping.jetbrains</id>
     <name>Cat Clapping</name>
-    <version>0.1.2</version>
+    <version>0.1.3</version>
     <vendor email="mail@yusufmolla.de" url="https://github.com/Yusufmolla/cat-clapping">Yusuf Molla</vendor>
 
     <description><![CDATA[
@@ -16,9 +16,8 @@
     ]]></description>
 
     <change-notes><![CDATA[
-    <h3>0.1.2</h3>
+    <h3>0.1.3</h3>
     <ul>
-      <li>Configured IntelliJ Plugin Verifier targets for automated verification.</li>
       <li>Added 40x40 SVG plugin icon and JetBrains Marketplace metadata.</li>
       <li>Supports Run/Debug/Test, BuildView, and Terminal shell-integration triggers (Python, <code>uv</code>, and C/C++ across macOS, Linux, and Windows).</li>
     </ul>
