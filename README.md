@@ -6,8 +6,8 @@ This repository contains both the **VS Code extension** and the **JetBrains IDE 
 
 ## Repository Structure
 
-- `extension/` — VS Code extension (`cat-clapping`)
-- `jetbrains-plugin/` — JetBrains Platform plugin (PyCharm, CLion, IntelliJ IDEA, etc.)
+- `extension/` — Original VS Code extension (`cat-clapping` by `nicosmartworking` / Nicola, see [extension/LICENSE.txt](extension/LICENSE.txt))
+- `jetbrains-plugin/` — JetBrains Platform plugin (PyCharm, CLion, IntelliJ IDEA, etc.) by Yusuf Molla
 
 ## JetBrains Plugin (PyCharm, CLion, ...)
 
@@ -44,4 +44,4 @@ git push origin v0.1.0
 
 ## License
 
-[MIT](LICENSE) © 2026 Yusuf Molla
+[MIT](LICENSE) — Original VS Code extension & assets © 2026 Nicola (`nicosmartworking`), JetBrains plugin © 2026 Yusuf Molla.
