@@ -4,6 +4,12 @@ Celebrate successful builds, runs, tests, and debug sessions with a clapping cat
 
 This repository contains both the **VS Code extension** and the **JetBrains IDE plugin** (PyCharm, CLion, IntelliJ IDEA, WebStorm, etc.) for **macOS, Linux, and Windows**.
 
+## Preview
+
+![Cat Clapping Demo in PyCharm](docs/media/cat-clapping-demo.gif)
+
+![Cat Clapping Settings](docs/media/screenshot-settings.jpg)
+
 ## Repository Structure
 
 - `extension/` — Original VS Code extension (`cat-clapping` by `nicosmartworking` / Nicola, see [extension/LICENSE.txt](extension/LICENSE.txt))

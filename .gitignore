@@ -6,3 +6,4 @@ jetbrains-plugin/.gradle/
 jetbrains-plugin/.idea/
 *.iml
 extension/media/test1.gif
+*.mov
