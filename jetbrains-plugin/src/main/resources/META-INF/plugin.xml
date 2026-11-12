@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>com.catclapping.jetbrains</id>
     <name>Cat Clapping</name>
-    <version>0.1.0</version>
+    <version>0.1.1</version>
     <vendor email="mail@yusufmolla.de" url="https://github.com/Yusufmolla/cat-clapping">Yusuf Molla</vendor>
 
     <description><![CDATA[
@@ -16,12 +16,11 @@
     ]]></description>
 
     <change-notes><![CDATA[
-    <h3>0.1.0</h3>
+    <h3>0.1.1</h3>
     <ul>
+      <li>Added 40x40 SVG plugin icon and JetBrains Marketplace metadata.</li>
       <li>Initial JetBrains Platform release for PyCharm, CLion, IntelliJ IDEA, and sibling IDEs.</li>
-      <li>Added Run/Debug/Test, BuildView, and Terminal shell-integration triggers.</li>
-      <li>Added support for Python, <code>uv</code>, and C/C++ commands across macOS, Linux, and Windows.</li>
-      <li>Added Settings panel under <b>Tools &rarr; Cat Clapping</b> with command filters and test button.</li>
+      <li>Supports Run/Debug/Test, BuildView, and Terminal shell-integration triggers (Python, <code>uv</code>, and C/C++ across macOS, Linux, and Windows).</li>
     </ul>
     ]]></change-notes>
 
