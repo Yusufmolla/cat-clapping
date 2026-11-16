@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>de.yusufmolla.catclapping</id>
     <name>Cat Clapping</name>
-    <version>0.1.7</version>
+    <version>0.1.8</version>
     <vendor url="https://github.com/Yusufmolla/cat-clapping">YusufMolla</vendor>
 
     <description><![CDATA[
@@ -16,6 +16,12 @@
     ]]></description>
 
     <change-notes><![CDATA[
+    <h3>0.1.8</h3>
+    <ul>
+      <li>Added selectable supported commands and custom terminal commands in <b>Settings &rarr; Tools &rarr; Cat Clapping</b>.</li>
+      <li>Added a draggable IDE window preview and anchor selector (<b>IDE Window</b> or <b>Active Editor</b>) to position the cat overlay freely, and increased the default cat size.</li>
+      <li>Hardened overlay/audio lifecycle, non-blocking settings preview loading, and terminal listener cleanup.</li>
+    </ul>
     <h3>0.1.7</h3>
     <ul>
       <li>Fixed EDT threading violation during project startup by dispatching startup hook registration via <code>invokeLater</code>.</li>

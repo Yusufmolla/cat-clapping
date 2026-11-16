@@ -38,22 +38,6 @@ public final class CatOverlay {
     }
 
     /**
-     * Shows the cat using saved settings. If {@code playback} is not null it is started at the same moment.
-     * Must be called on the EDT.
-     */
-    public static boolean show(Project project, SoundPlayer.Playback playback) {
-        CatClappingSettings settings = CatClappingSettings.getInstance();
-        return showOverlay(
-                project,
-                playback,
-                settings.getCatSizePx(),
-                settings.getCatPosX(),
-                settings.getCatPosY(),
-                settings.getCatAnchor(),
-                null) != null;
-    }
-
-    /**
      * Shows the cat with explicit placement parameters and returns an idempotent cleanup handle, or null if not shown.
      * Must be called on the EDT.
      */

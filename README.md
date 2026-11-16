@@ -4,6 +4,8 @@ Celebrate successful builds, runs, tests, and debug sessions with a clapping cat
 
 **JetBrains IDE plugin** (PyCharm, CLion, IntelliJ IDEA, WebStorm, etc.) for **macOS, Linux, and Windows**.
 
+Install from [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/36093-cat-clapping) (or **Settings → Plugins → Marketplace → "Cat Clapping"**).
+
 ## Preview
 
 ![Cat Clapping Demo in PyCharm](docs/media/cat-clapping-demo.gif)
@@ -30,7 +32,7 @@ cd jetbrains-plugin
 gradle check buildPlugin
 ```
 
-Or install the generated `jetbrains-plugin/build/distributions/cat-clapping-jetbrains-0.1.7.zip` in PyCharm/CLion via **Settings → Plugins → ⚙️ → Install Plugin from Disk...**.
+Or install the generated `jetbrains-plugin/build/distributions/cat-clapping-jetbrains-0.1.8.zip` in PyCharm/CLion via **Settings → Plugins → ⚙️ → Install Plugin from Disk...**.
 
 ### GitHub Release Workflow (no auto-build on `main`)
 

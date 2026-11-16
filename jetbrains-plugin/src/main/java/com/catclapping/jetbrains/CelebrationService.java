@@ -32,12 +32,8 @@ public final class CelebrationService implements Disposable {
     }
 
     public void celebrate() {
-        celebrate(false);
-    }
-
-    public void celebrate(boolean ignoreCooldown) {
         CatClappingSettings settings = CatClappingSettings.getInstance();
-        trigger(ignoreCooldown,
+        trigger(false,
                 settings.isSoundEnabled(),
                 settings.getVolumePercent(),
                 settings.getCatSizePx(),

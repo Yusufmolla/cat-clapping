@@ -21,7 +21,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * Plays the bundled celebration WAV sound across macOS, Linux, and Windows.
  * <p>
- * Use {@link #prepare()} off the EDT to open the audio line in advance, then {@link Playback#start()}
+ * Use {@link #prepare(int)} off the EDT to open the audio line in advance, then {@link Playback#start()}
  * at the exact moment the animation starts. {@link Playback#positionMs()} reports how much audio has
  * actually been played so the animation can follow the sound.
  */
@@ -34,12 +34,6 @@ public final class SoundPlayer {
     private static volatile Path cachedTempAudioFile;
 
     private SoundPlayer() {
-    }
-
-    /** Fire-and-forget playback respecting current sound settings (used when no animation is shown). */
-    public static void play() {
-        CatClappingSettings settings = CatClappingSettings.getInstance();
-        play(settings.isSoundEnabled(), settings.getVolumePercent());
     }
 
     /** Fire-and-forget playback for explicit sound/volume values. */
@@ -55,15 +49,6 @@ public final class SoundPlayer {
         }, "cat-clapping-audio");
         thread.setDaemon(true);
         thread.start();
-    }
-
-    /**
-     * Opens the audio line so playback can start without delay. May block; call off the EDT.
-     *
-     * @return a ready playback, or null when the volume is 0.
-     */
-    public static Playback prepare() {
-        return prepare(CatClappingSettings.getInstance().getVolumePercent());
     }
 
     /**
@@ -124,13 +109,6 @@ public final class SoundPlayer {
             }
             // Safety net if the audio device never reports progress.
             return Math.max(wallMs - 500L, 0L);
-        }
-
-        /** Releases the audio line if playback was never started. */
-        public void discard() {
-            if (startNanos < 0) {
-                stop();
-            }
         }
 
         /** Stops playback (whether started or only prepared) and releases resources. */
