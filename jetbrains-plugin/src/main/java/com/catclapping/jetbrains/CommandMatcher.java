@@ -13,6 +13,62 @@ import java.util.regex.Pattern;
  */
 public final class CommandMatcher {
 
+    /**
+     * Metadata for a built-in command or trigger category displayed in the settings UI.
+     */
+    public record SupportedCommand(String id, String label, String category) {
+    }
+
+    private static final List<SupportedCommand> SUPPORTED_COMMANDS = List.of(
+            // IDE & General
+            new SupportedCommand("tasks", "IDE Run / Build tasks", "IDE & General"),
+            new SupportedCommand("debug", "Debug sessions", "IDE & General"),
+            new SupportedCommand("executable", "Executables (./app, *.exe)", "IDE & General"),
+            // Python
+            new SupportedCommand("python", "python / py / pytest", "Python"),
+            new SupportedCommand("uv", "uv / uvx", "Python"),
+            new SupportedCommand("poetry", "poetry", "Python"),
+            new SupportedCommand("pdm", "pdm", "Python"),
+            new SupportedCommand("pipenv", "pipenv", "Python"),
+            // C / C++
+            new SupportedCommand("gcc", "gcc / cc", "C / C++"),
+            new SupportedCommand("clang", "clang", "C / C++"),
+            new SupportedCommand("g++", "g++", "C / C++"),
+            new SupportedCommand("clang++", "clang++", "C / C++"),
+            new SupportedCommand("cl", "cl / cl.exe", "C / C++"),
+            new SupportedCommand("cmake", "cmake / ctest", "C / C++"),
+            new SupportedCommand("make", "make / nmake / mingw32-make", "C / C++"),
+            new SupportedCommand("ninja", "ninja", "C / C++"),
+            new SupportedCommand("meson", "meson", "C / C++"),
+            // JavaScript / TypeScript
+            new SupportedCommand("node", "node / tsx / bun / deno", "JavaScript / TypeScript"),
+            new SupportedCommand("npm", "npm / npx", "JavaScript / TypeScript"),
+            new SupportedCommand("yarn", "yarn", "JavaScript / TypeScript"),
+            new SupportedCommand("pnpm", "pnpm", "JavaScript / TypeScript"),
+            new SupportedCommand("tsc", "tsc", "JavaScript / TypeScript"),
+            // Java & JVM
+            new SupportedCommand("java", "java", "Java & JVM"),
+            new SupportedCommand("kotlin", "kotlin", "Java & JVM"),
+            new SupportedCommand("mvn", "mvn / mvnw", "Java & JVM"),
+            new SupportedCommand("gradle", "gradle / gradlew", "Java & JVM"),
+            // Other Languages & Tools
+            new SupportedCommand("cargo", "cargo", "Other Languages & Tools"),
+            new SupportedCommand("go", "go", "Other Languages & Tools"),
+            new SupportedCommand("dotnet", "dotnet", "Other Languages & Tools"),
+            new SupportedCommand("swift", "swift", "Other Languages & Tools"),
+            new SupportedCommand("ruby", "ruby", "Other Languages & Tools"),
+            new SupportedCommand("php", "php", "Other Languages & Tools"),
+            new SupportedCommand("perl", "perl", "Other Languages & Tools"),
+            new SupportedCommand("lua", "lua", "Other Languages & Tools"),
+            new SupportedCommand("rscript", "rscript", "Other Languages & Tools"),
+            new SupportedCommand("bash", "bash / sh / zsh", "Other Languages & Tools"),
+            new SupportedCommand("sf", "sf / sfdx", "Other Languages & Tools")
+    );
+
+    private static final Set<String> SUPPORTED_IDS = SUPPORTED_COMMANDS.stream()
+            .map(SupportedCommand::id)
+            .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+
     private static final Pattern ENV_PREFIX = Pattern.compile(
             "^\\s*(?:[A-Za-z_][A-Za-z0-9_]*=(?:\"[^\"]*\"|'[^']*'|\\S+)\\s+)+");
 
@@ -31,7 +87,7 @@ public final class CommandMatcher {
             Pattern.CASE_INSENSITIVE);
 
     private static final Pattern RUNNER_SUBCOMMAND = Pattern.compile(
-            "^(?:(?:dotnet|cargo|go)\\s+run\\b|(?:uv|poetry|pdm|pipenv)\\s+run\\b|(?:npm|pnpm|yarn)\\s+(?:run\\s+\\S+|start\\b|test\\b|exec\\b)|npx\\s+\\S+)",
+            "^(?:(?:dotnet|cargo|go)\\s+(?:run|test)\\b|(?:uv|poetry|pdm|pipenv)\\s+run\\b|(?:npm|pnpm|yarn)\\s+(?:run\\s+\\S+|start\\b|test\\b|exec\\b)|npx\\s+\\S+)",
             Pattern.CASE_INSENSITIVE);
 
     private static final List<Pattern> BUILD_PATTERNS = List.of(
@@ -60,6 +116,21 @@ public final class CommandMatcher {
     );
 
     private CommandMatcher() {
+    }
+
+    public static List<SupportedCommand> supportedCommands() {
+        return SUPPORTED_COMMANDS;
+    }
+
+    public static List<String> supportedCommandIds() {
+        return new ArrayList<>(SUPPORTED_IDS);
+    }
+
+    public static boolean isSupportedCommandId(String id) {
+        if (id == null) {
+            return false;
+        }
+        return SUPPORTED_IDS.contains(id.trim().toLowerCase(Locale.ROOT));
     }
 
     public static String stripLeadingEnv(String command) {
@@ -137,6 +208,27 @@ public final class CommandMatcher {
             selectors.add("c");
             selectors.add("cpp");
         }
+        if ("cc".equals(stem)) {
+            selectors.add("gcc");
+        }
+        if ("ctest".equals(stem)) {
+            selectors.add("cmake");
+        }
+        if ("mingw32-make".equals(stem) || "nmake".equals(stem)) {
+            selectors.add("make");
+        }
+        if ("mvnw".equals(stem)) {
+            selectors.add("mvn");
+        }
+        if ("gradlew".equals(stem)) {
+            selectors.add("gradle");
+        }
+        if ("sh".equals(stem) || "zsh".equals(stem)) {
+            selectors.add("bash");
+        }
+        if ("sfdx".equals(stem)) {
+            selectors.add("sf");
+        }
         if (token.matches("^(?:\\./|\\.\\\\|~/|/|[a-z]:[\\\\/]).*") || name.endsWith(".exe")) {
             selectors.add("executable");
         }
@@ -155,6 +247,22 @@ public final class CommandMatcher {
         for (String selector : commandSelectors(command)) {
             if (choices.contains(selector)) {
                 return true;
+            }
+        }
+        String normalizedCommand = stripLeadingEnv(command)
+                .replaceFirst("^&\\s+", "")
+                .replaceAll("\\s+", " ")
+                .trim()
+                .toLowerCase(Locale.ROOT);
+        if (!normalizedCommand.isEmpty()) {
+            for (String choice : choices) {
+                if (choice.indexOf(' ') >= 0) {
+                    String normalizedChoice = choice.replaceAll("\\s+", " ").trim();
+                    if (normalizedCommand.equals(normalizedChoice)
+                            || normalizedCommand.startsWith(normalizedChoice + " ")) {
+                        return true;
+                    }
+                }
             }
         }
         return false;

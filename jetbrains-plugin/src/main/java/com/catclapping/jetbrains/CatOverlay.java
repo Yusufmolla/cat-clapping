@@ -22,12 +22,12 @@ import java.awt.image.BufferedImage;
 import java.util.function.LongSupplier;
 
 /**
- * Displays the animated clapping cat at the top center of the active editor (or IDE frame).
+ * Displays the animated clapping cat at the configured position in the active editor or IDE window.
  * The animation is driven by the audio position so clapping and sound stay in sync.
  */
 public final class CatOverlay {
 
-    private static final int TOP_MARGIN_PX = 8;
+    private static final int EDGE_MARGIN_PX = 8;
     private static final int TICK_MS = 10;
     private static final int PREBUFFER_FRAMES = 4;
     private static final long MAX_PREBUFFER_WAIT_MS = 3000L;
@@ -57,8 +57,9 @@ public final class CatOverlay {
         int rawW = Math.max(raw[0], 1);
         int rawH = Math.max(raw[1], 1);
         JLayeredPane layeredPane = rootPane.getLayeredPane();
-        int desiredH = CatClappingSettings.getInstance().getCatSizePx();
-        int availableH = layeredPane.getHeight() > 0 ? layeredPane.getHeight() - 2 * TOP_MARGIN_PX : desiredH;
+        CatClappingSettings settings = CatClappingSettings.getInstance();
+        int desiredH = settings.getCatSizePx();
+        int availableH = layeredPane.getHeight() > 0 ? layeredPane.getHeight() - 2 * EDGE_MARGIN_PX : desiredH;
         int maxH = Math.max(Math.min(desiredH, availableH), 32);
         double scale = (double) maxH / rawH;
         int targetW = Math.max((int) Math.round(rawW * scale), 16);
@@ -104,9 +105,11 @@ public final class CatOverlay {
         };
         overlay.setOpaque(false);
 
-        Component anchor = findAnchorComponent(project, layeredPane);
-        Point topCenter = computeTopCenter(anchor, layeredPane, targetW, targetH);
-        overlay.setBounds(topCenter.x, topCenter.y, targetW, targetH);
+        Component anchor = settings.getCatAnchor() == CatAnchor.WINDOW
+                ? layeredPane
+                : findAnchorComponent(project, layeredPane);
+        Point location = computeLocation(settings.getCatPosition(), anchor, layeredPane, targetW, targetH);
+        overlay.setBounds(location.x, location.y, targetW, targetH);
         layeredPane.add(overlay, JLayeredPane.POPUP_LAYER);
         layeredPane.revalidate();
 
@@ -185,14 +188,22 @@ public final class CatOverlay {
         return fallback;
     }
 
-    private static Point computeTopCenter(Component anchor, JLayeredPane layeredPane, int width, int height) {
+    private static Point computeLocation(
+            CatPosition position,
+            Component anchor,
+            JLayeredPane layeredPane,
+            int width,
+            int height) {
         if (anchor == layeredPane || !anchor.isShowing()) {
-            int x = Math.max((layeredPane.getWidth() - width) / 2, 0);
-            return new Point(x, TOP_MARGIN_PX);
+            return position.computePoint(
+                    0, 0, layeredPane.getWidth(), layeredPane.getHeight(),
+                    layeredPane.getWidth(), layeredPane.getHeight(),
+                    width, height, EDGE_MARGIN_PX);
         }
-        Point point = SwingUtilities.convertPoint(anchor, (anchor.getWidth() - width) / 2, TOP_MARGIN_PX, layeredPane);
-        int clampedX = Math.max(0, Math.min(point.x, Math.max(layeredPane.getWidth() - width, 0)));
-        int clampedY = Math.max(0, Math.min(point.y, Math.max(layeredPane.getHeight() - height, 0)));
-        return new Point(clampedX, clampedY);
+        Point anchorOrigin = SwingUtilities.convertPoint(anchor, 0, 0, layeredPane);
+        return position.computePoint(
+                anchorOrigin.x, anchorOrigin.y, anchor.getWidth(), anchor.getHeight(),
+                layeredPane.getWidth(), layeredPane.getHeight(),
+                width, height, EDGE_MARGIN_PX);
     }
 }

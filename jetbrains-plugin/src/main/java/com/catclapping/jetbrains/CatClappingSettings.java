@@ -9,7 +9,10 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 /**
  * Persistent application settings for Cat Clapping.
@@ -19,16 +22,18 @@ import java.util.List;
 public final class CatClappingSettings implements PersistentStateComponent<CatClappingSettings.State> {
 
     public static final class State {
-        public List<String> enabledCommands = new ArrayList<>(List.of("*"));
+        public List<String> enabledCommands = new ArrayList<>(CommandMatcher.supportedCommandIds());
         public boolean soundEnabled = true;
         public int volumePercent = DEFAULT_VOLUME_PERCENT;
         public int catSizePx = DEFAULT_CAT_SIZE_PX;
+        public CatPosition catPosition = CatPosition.TOP_CENTER;
+        public CatAnchor catAnchor = CatAnchor.EDITOR;
     }
 
     public static final int DEFAULT_VOLUME_PERCENT = 80;
-    public static final int DEFAULT_CAT_SIZE_PX = 320;
+    public static final int DEFAULT_CAT_SIZE_PX = 520;
     public static final int MIN_CAT_SIZE_PX = 80;
-    public static final int MAX_CAT_SIZE_PX = 900;
+    public static final int MAX_CAT_SIZE_PX = 1000;
 
     private State state = new State();
 
@@ -47,14 +52,49 @@ public final class CatClappingSettings implements PersistentStateComponent<CatCl
         if (this.state.enabledCommands == null) {
             this.state.enabledCommands = new ArrayList<>();
         }
+        if (this.state.catPosition == null) {
+            this.state.catPosition = CatPosition.TOP_CENTER;
+        }
+        if (this.state.catAnchor == null) {
+            this.state.catAnchor = CatAnchor.EDITOR;
+        }
     }
 
     public List<String> getEnabledCommands() {
-        return state.enabledCommands != null ? state.enabledCommands : List.of("*");
+        return state.enabledCommands != null ? state.enabledCommands : CommandMatcher.supportedCommandIds();
     }
 
     public void setEnabledCommands(List<String> commands) {
         state.enabledCommands = new ArrayList<>(commands);
+    }
+
+    /**
+     * Resolves stored command entries (including legacy {@code "*"}) into concrete command IDs
+     * matching the settings UI selection model.
+     */
+    public static List<String> resolveCommandSelection(List<String> stored) {
+        if (stored == null || stored.isEmpty()) {
+            return List.of();
+        }
+        Set<String> resolved = new LinkedHashSet<>();
+        boolean hasWildcard = false;
+        for (String item : stored) {
+            if (item == null) {
+                continue;
+            }
+            String normalized = item.trim().toLowerCase(Locale.ROOT);
+            if ("*".equals(normalized)) {
+                hasWildcard = true;
+            } else if (!normalized.isEmpty()) {
+                resolved.add(normalized);
+            }
+        }
+        if (hasWildcard) {
+            Set<String> withSupported = new LinkedHashSet<>(CommandMatcher.supportedCommandIds());
+            withSupported.addAll(resolved);
+            return new ArrayList<>(withSupported);
+        }
+        return new ArrayList<>(resolved);
     }
 
     public boolean isSoundEnabled() {
@@ -79,6 +119,22 @@ public final class CatClappingSettings implements PersistentStateComponent<CatCl
 
     public void setCatSizePx(int catSizePx) {
         state.catSizePx = clamp(catSizePx, MIN_CAT_SIZE_PX, MAX_CAT_SIZE_PX);
+    }
+
+    public CatPosition getCatPosition() {
+        return state.catPosition != null ? state.catPosition : CatPosition.TOP_CENTER;
+    }
+
+    public void setCatPosition(CatPosition catPosition) {
+        state.catPosition = catPosition != null ? catPosition : CatPosition.TOP_CENTER;
+    }
+
+    public CatAnchor getCatAnchor() {
+        return state.catAnchor != null ? state.catAnchor : CatAnchor.EDITOR;
+    }
+
+    public void setCatAnchor(CatAnchor catAnchor) {
+        state.catAnchor = catAnchor != null ? catAnchor : CatAnchor.EDITOR;
     }
 
     private static int clamp(int value, int min, int max) {
