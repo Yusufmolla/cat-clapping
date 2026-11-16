@@ -76,22 +76,28 @@ public final class TerminalCelebrationHook implements ProjectActivity {
                 if (integration == null || celebrationService.isDisposed()) {
                     return;
                 }
-                Disposable listenerDisposable = Disposer.newDisposable(celebrationService, "CatClappingReworkedTerminal");
-                integration.addCommandExecutionListener(listenerDisposable, new TerminalCommandExecutionListener() {
-                    @Override
-                    public void commandStarted(@NotNull TerminalCommandStartedEvent event) {
-                        // No-op
+                // Register on the EDT so disposal cannot race with Disposer.newDisposable.
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    if (celebrationService.isDisposed()) {
+                        return;
                     }
-
-                    @Override
-                    public void commandFinished(@NotNull TerminalCommandFinishedEvent event) {
-                        TerminalCommandBlock block = event.getCommandBlock();
-                        Integer exitCode = block.getExitCode();
-                        String command = block.getExecutedCommand();
-                        if (exitCode != null && exitCode == 0 && command != null) {
-                            onTerminalCommandSucceeded(command, celebrationService);
+                    Disposable listenerDisposable = Disposer.newDisposable(celebrationService, "CatClappingReworkedTerminal");
+                    integration.addCommandExecutionListener(listenerDisposable, new TerminalCommandExecutionListener() {
+                        @Override
+                        public void commandStarted(@NotNull TerminalCommandStartedEvent event) {
+                            // No-op
                         }
-                    }
+
+                        @Override
+                        public void commandFinished(@NotNull TerminalCommandFinishedEvent event) {
+                            TerminalCommandBlock block = event.getCommandBlock();
+                            Integer exitCode = block.getExitCode();
+                            String command = block.getExecutedCommand();
+                            if (exitCode != null && exitCode == 0 && command != null) {
+                                onTerminalCommandSucceeded(command, celebrationService);
+                            }
+                        }
+                    });
                 });
             });
         } catch (LinkageError | RuntimeException e) {

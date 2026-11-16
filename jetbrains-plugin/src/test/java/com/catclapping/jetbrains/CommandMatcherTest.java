@@ -1,11 +1,13 @@
 package com.catclapping.jetbrains;
 
 import java.awt.Point;
+import java.awt.image.BufferedImage;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
- * Self-contained unit checks for CommandMatcher and CatPosition (runnable via java -ea).
+ * Self-contained unit checks for CommandMatcher, CatPlacement, CatClappingSettings, and CatAnimation.
  */
 public final class CommandMatcherTest {
 
@@ -70,11 +72,24 @@ public final class CommandMatcherTest {
             assertEnabled("zsh script.zsh", enabled);
             assertEnabled("sfdx force:source:deploy", enabled);
 
-            // Non-build/non-run shell navigation should NOT trigger
+            // Non-build/non-run shell commands should NOT trigger
             assertDisabled("ls -la", enabled);
             assertDisabled("cd src", enabled);
             assertDisabled("git status", enabled);
             assertDisabled("pwd", enabled);
+            assertDisabled("npm install", enabled);
+            assertDisabled("npm --version", enabled);
+            assertDisabled("uv venv", enabled);
+            assertDisabled("uv pip install requests", enabled);
+            assertDisabled("poetry install", enabled);
+            assertDisabled("go version", enabled);
+            assertDisabled("dotnet restore", enabled);
+            assertDisabled("echo \"cd && make\"", enabled);
+
+            // Chained build/run commands and PowerShell & without space
+            assertEnabled("cd build && cmake --build .", enabled);
+            assertEnabled("mkdir -p out && make", enabled);
+            assertEnabled("&\"C:\\Apps\\app.exe\"", enabled);
         }
 
         // Selective filters & deselecting supported commands
@@ -91,20 +106,49 @@ public final class CommandMatcherTest {
         assertDisabled("python main.py", withoutPython);
         assertEnabled("uv run app.py", withoutPython);
 
+        List<String> withoutCmake = new ArrayList<>(defaults);
+        withoutCmake.remove("cmake");
+        assertDisabled("cd build && cmake --build .", withoutCmake);
+
         // Custom single-word and multi-word commands
         assertEnabled("docker compose up", List.of("docker"));
         assertEnabled("ruff check .", List.of("ruff"));
         assertEnabled("cargo test --workspace", List.of("cargo test"));
+        assertEnabled("& cargo test --workspace", List.of("cargo test"));
+        assertEnabled("&\"C:\\Apps\\myapp.exe\" --verbose", List.of("myapp.exe"));
+        assertEnabled("&\"C:\\Apps\\myapp.exe\" --verbose", List.of("executable"));
         assertDisabled("cargo build", List.of("cargo test"));
 
-        // Run configurations & builds
+        // Run configurations & builds (ensure tasks doesn't override deselected debug/language)
         assertTrue(CommandMatcher.isRunConfigurationEnabled("main", "PythonConfigurationType", false, List.of("python")));
         assertTrue(CommandMatcher.isRunConfigurationEnabled("my_app", "CMakeRunConfiguration", false, List.of("c")));
         assertTrue(CommandMatcher.isRunConfigurationEnabled("test", "PythonConfigurationType", true, List.of("debug")));
-        assertTrue(CommandMatcher.isBuildEnabled(List.of("cmake")));
-        assertTrue(!CommandMatcher.isBuildEnabled(List.of("python")));
         assertTrue(CommandMatcher.isRunConfigurationEnabled("any", "CustomType", false, defaults));
+
+        List<String> withoutDebug = new ArrayList<>(defaults);
+        withoutDebug.remove("debug");
+        assertTrue(!CommandMatcher.isRunConfigurationEnabled("main", "PythonConfigurationType", true, withoutDebug));
+        assertTrue(!CommandMatcher.isRunConfigurationEnabled("main", "PythonConfigurationType", false, withoutPython));
+        assertTrue(CommandMatcher.isRunConfigurationEnabled("main", "PythonConfigurationType", false, List.of("python")));
+
+        List<String> withoutTasks = new ArrayList<>(defaults);
+        withoutTasks.remove("tasks");
+        assertTrue(!CommandMatcher.isRunConfigurationEnabled("any", "CustomType", false, withoutTasks));
+
+        assertTrue(CommandMatcher.isBuildEnabled(List.of("cmake")));
+        assertTrue(CommandMatcher.isBuildEnabled(List.of("gradle")));
+        assertTrue(!CommandMatcher.isBuildEnabled(List.of("python")));
+        assertTrue(!CommandMatcher.isBuildEnabled(List.of("debug")));
         assertTrue(CommandMatcher.isBuildEnabled(defaults));
+
+        // Settings migration & normalization
+        assertTrue(CatClappingSettings.resolveCommandSelection(null).isEmpty());
+        assertTrue(CatClappingSettings.resolveCommandSelection(List.of()).isEmpty());
+        assertTrue(CatClappingSettings.resolveCommandSelection(List.of("*")).equals(defaults));
+        List<String> withCustom = CatClappingSettings.resolveCommandSelection(List.of("*", "docker"));
+        assertTrue(withCustom.contains("python") && withCustom.contains("docker"));
+        List<String> normalized = CatClappingSettings.resolveCommandSelection(Arrays.asList(" Python ", null, "  "));
+        assertTrue(normalized.equals(List.of("python")));
 
         // Position computation & clamping
         assertPoint(CatPlacement.computePoint(0.0, 0.0, 100, 50, 800, 600, 1200, 900, 200, 300, 8), 108, 58);
@@ -116,6 +160,13 @@ public final class CommandMatcherTest {
         assertPoint(CatPlacement.computePoint(2.0, 2.0, 0, 0, 1500, 1200, 1000, 800, 200, 300, 8), 800, 500);
         assertPoint(CatPlacement.computePoint(-1.0, -1.0, -50, -50, 500, 500, 1000, 800, 200, 300, 8), 0, 0);
         assertTrue(CatPlacement.clampNormalized(Double.NaN) == 0.0);
+
+        // Bundled GIF metadata & preview smoke check
+        int[] gifSize = CatAnimation.rawSize();
+        assertTrue(gifSize != null && gifSize[0] > 0 && gifSize[1] > 0);
+        assertTrue(CatAnimation.cachedRawSize() != null);
+        BufferedImage preview = CatAnimation.firstFramePreview();
+        assertTrue(preview != null && preview.getHeight() == 220 && preview.getWidth() > 0);
 
         System.out.println("All CommandMatcherTest assertions passed!");
     }

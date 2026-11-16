@@ -131,6 +131,11 @@ final class CatAnimation {
         }
     }
 
+    /** Returns already-cached GIF size {width, height} without reading or decoding, or null. */
+    static int[] cachedRawSize() {
+        return cachedRawSize;
+    }
+
     /** Raw GIF size {width, height}, or null if it cannot be read. */
     static int[] rawSize() {
         int[] size = cachedRawSize;

@@ -36,10 +36,19 @@ public final class SoundPlayer {
     private SoundPlayer() {
     }
 
-    /** Fire-and-forget playback (used when no animation is shown). */
+    /** Fire-and-forget playback respecting current sound settings (used when no animation is shown). */
     public static void play() {
+        CatClappingSettings settings = CatClappingSettings.getInstance();
+        play(settings.isSoundEnabled(), settings.getVolumePercent());
+    }
+
+    /** Fire-and-forget playback for explicit sound/volume values. */
+    public static void play(boolean soundEnabled, int volumePercent) {
+        if (!soundEnabled || volumePercent <= 0) {
+            return;
+        }
         Thread thread = new Thread(() -> {
-            Playback playback = prepare();
+            Playback playback = prepare(volumePercent);
             if (playback != null) {
                 playback.start();
             }
@@ -54,7 +63,15 @@ public final class SoundPlayer {
      * @return a ready playback, or null when the volume is 0.
      */
     public static Playback prepare() {
-        double volume = CatClappingSettings.getInstance().getVolumePercent() / 100.0;
+        return prepare(CatClappingSettings.getInstance().getVolumePercent());
+    }
+
+    /**
+     * Opens the audio line for the given volume (0..100). May block; call off the EDT.
+     */
+    public static Playback prepare(int volumePercent) {
+        int clamped = Math.max(0, Math.min(100, volumePercent));
+        double volume = clamped / 100.0;
         if (volume <= 0.0) {
             return null;
         }
@@ -66,6 +83,9 @@ public final class SoundPlayer {
         private final Clip clip;
         private final double volume;
         private volatile long startNanos = -1L;
+        private volatile boolean finished;
+        private volatile long lastClipMs;
+        private volatile Process activeProcess;
 
         private Playback(Clip clip, double volume) {
             this.clip = clip;
@@ -78,7 +98,8 @@ public final class SoundPlayer {
                 return;
             }
             startNanos = System.nanoTime();
-            Thread thread = new Thread(clip != null ? this::runClip : () -> playViaOsFallback(volume),
+            Thread thread = new Thread(
+                    clip != null ? this::runClip : () -> playViaOsFallback(volume, this),
                     "cat-clapping-audio");
             thread.setDaemon(true);
             thread.start();
@@ -93,8 +114,12 @@ public final class SoundPlayer {
             if (clip == null) {
                 return Math.max(wallMs - OS_PLAYER_LATENCY_MS, 0L);
             }
+            if (finished) {
+                return Math.max(wallMs, lastClipMs);
+            }
             long clipMs = clip.getMicrosecondPosition() / 1000L;
             if (clipMs > 0) {
+                lastClipMs = clipMs;
                 return clipMs;
             }
             // Safety net if the audio device never reports progress.
@@ -103,27 +128,41 @@ public final class SoundPlayer {
 
         /** Releases the audio line if playback was never started. */
         public void discard() {
-            if (startNanos < 0 && clip != null) {
+            if (startNanos < 0) {
+                stop();
+            }
+        }
+
+        /** Stops playback (whether started or only prepared) and releases resources. */
+        public void stop() {
+            finished = true;
+            if (clip != null) {
+                clip.stop();
                 clip.close();
+            }
+            Process process = activeProcess;
+            if (process != null) {
+                process.destroy();
             }
         }
 
         private void runClip() {
             try {
-                CountDownLatch finished = new CountDownLatch(1);
+                CountDownLatch finishedLatch = new CountDownLatch(1);
                 clip.addLineListener(event -> {
                     if (event.getType() == LineEvent.Type.STOP || event.getType() == LineEvent.Type.CLOSE) {
-                        finished.countDown();
+                        finishedLatch.countDown();
                     }
                 });
                 // Clip.start() is asynchronous and isRunning() is still false right after it,
                 // so wait for the STOP event (bounded by the clip length) before closing.
                 long lengthMs = Math.max(clip.getMicrosecondLength() / 1000L, 0L);
                 clip.start();
-                finished.await(lengthMs + 2000L, TimeUnit.MILLISECONDS);
+                finishedLatch.await(lengthMs + 2000L, TimeUnit.MILLISECONDS);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             } finally {
+                finished = true;
                 clip.close();
             }
         }
@@ -164,26 +203,26 @@ public final class SoundPlayer {
         }
     }
 
-    private static void playViaOsFallback(double volume) {
+    private static void playViaOsFallback(double volume, Playback playback) {
         try {
             Path audioFile = ensureTempAudioFile();
-            if (audioFile == null) {
+            if (audioFile == null || playback.finished) {
                 return;
             }
             String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
             String path = audioFile.toAbsolutePath().toString();
             if (os.contains("mac")) {
-                runPlayer(List.of("afplay", "-v", String.format(Locale.ROOT, "%.2f", volume), path));
+                runPlayer(List.of("afplay", "-v", String.format(Locale.ROOT, "%.2f", volume), path), playback);
             } else if (os.contains("win")) {
                 String escaped = path.replace("'", "''");
                 String cmd = "$player = New-Object System.Media.SoundPlayer; "
                         + "$player.SoundLocation = '" + escaped + "'; "
                         + "$player.Load(); $player.PlaySync();";
-                runPlayer(List.of("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", cmd));
+                runPlayer(List.of("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", cmd), playback);
             } else {
                 int paVolume = (int) Math.round(volume * 65536);
-                if (!runPlayer(List.of("paplay", "--volume=" + paVolume, path))) {
-                    runPlayer(List.of("aplay", path));
+                if (!runPlayer(List.of("paplay", "--volume=" + paVolume, path), playback) && !playback.finished) {
+                    runPlayer(List.of("aplay", path), playback);
                 }
             }
         } catch (Exception e) {
@@ -191,17 +230,26 @@ public final class SoundPlayer {
         }
     }
 
-    private static boolean runPlayer(List<String> command) {
+    private static boolean runPlayer(List<String> command, Playback playback) {
+        Process process = null;
         try {
-            Process process = new ProcessBuilder(command)
-                    .redirectErrorStream(true)
+            process = new ProcessBuilder(command)
+                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                    .redirectError(ProcessBuilder.Redirect.DISCARD)
                     .start();
+            playback.activeProcess = process;
+            if (playback.finished) {
+                process.destroy();
+                return false;
+            }
             return process.waitFor() == 0;
         } catch (IOException | InterruptedException e) {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
             return false;
+        } finally {
+            playback.activeProcess = null;
         }
     }
 

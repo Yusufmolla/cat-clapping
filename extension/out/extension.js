@@ -132,7 +132,6 @@ function isBuildCommand(command) {
         /\bcl(\.exe)?\b/,
         /\bcmake\s+--build\b/,
         /\bninja\b/,
-        /\bmake\b/,
         // Salesforce
         /\bsf\s+project\s+deploy\b/,
         /\bsfdx\s+force:source:deploy\b/

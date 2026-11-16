@@ -19,6 +19,7 @@ import java.awt.GraphicsConfiguration;
 import java.awt.Point;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.LongSupplier;
 
 /**
@@ -37,28 +38,51 @@ public final class CatOverlay {
     }
 
     /**
-     * Shows the cat. If {@code playback} is not null it is started at the same moment the animation starts.
+     * Shows the cat using saved settings. If {@code playback} is not null it is started at the same moment.
      * Must be called on the EDT.
      */
     public static boolean show(Project project, SoundPlayer.Playback playback) {
+        CatClappingSettings settings = CatClappingSettings.getInstance();
+        return showOverlay(
+                project,
+                playback,
+                settings.getCatSizePx(),
+                settings.getCatPosX(),
+                settings.getCatPosY(),
+                settings.getCatAnchor(),
+                null) != null;
+    }
+
+    /**
+     * Shows the cat with explicit placement parameters and returns an idempotent cleanup handle, or null if not shown.
+     * Must be called on the EDT.
+     */
+    static Runnable showOverlay(
+            Project project,
+            SoundPlayer.Playback playback,
+            int desiredSizePx,
+            double posX,
+            double posY,
+            CatAnchor anchorType,
+            Runnable onFinished) {
         JFrame frame = WindowManager.getInstance().getFrame(project);
         if (frame == null || !frame.isShowing()) {
-            return false;
+            return null;
         }
         JRootPane rootPane = frame.getRootPane();
         if (rootPane == null) {
-            return false;
+            return null;
         }
         int[] raw = CatAnimation.rawSize();
         if (raw == null) {
-            return false;
+            return null;
         }
 
         int rawW = Math.max(raw[0], 1);
         int rawH = Math.max(raw[1], 1);
         JLayeredPane layeredPane = rootPane.getLayeredPane();
-        CatClappingSettings settings = CatClappingSettings.getInstance();
-        int desiredH = settings.getCatSizePx();
+        int desiredH = Math.max(CatClappingSettings.MIN_CAT_SIZE_PX,
+                Math.min(CatClappingSettings.MAX_CAT_SIZE_PX, desiredSizePx));
         int availableH = layeredPane.getHeight() > 0 ? layeredPane.getHeight() - 2 * EDGE_MARGIN_PX : desiredH;
         int maxH = Math.max(Math.min(desiredH, availableH), 32);
         double scale = (double) maxH / rawH;
@@ -105,10 +129,11 @@ public final class CatOverlay {
         };
         overlay.setOpaque(false);
 
-        Component anchor = settings.getCatAnchor() == CatAnchor.WINDOW
+        CatAnchor resolvedAnchor = anchorType != null ? anchorType : CatAnchor.WINDOW;
+        Component anchor = resolvedAnchor == CatAnchor.WINDOW
                 ? layeredPane
                 : findAnchorComponent(project, layeredPane);
-        Point location = computeLocation(settings.getCatPosX(), settings.getCatPosY(), anchor, layeredPane, targetW, targetH);
+        Point location = computeLocation(posX, posY, anchor, layeredPane, targetW, targetH);
         overlay.setBounds(location.x, location.y, targetW, targetH);
         layeredPane.add(overlay, JLayeredPane.POPUP_LAYER);
         layeredPane.revalidate();
@@ -116,21 +141,28 @@ public final class CatOverlay {
         final long createdNanos = System.nanoTime();
         final boolean[] started = {false};
         final long[] lastFrameEndMs = {0L};
+        final AtomicBoolean cleanedUp = new AtomicBoolean(false);
         Timer timer = new Timer(TICK_MS, null);
         Runnable cleanup = () -> {
+            if (!cleanedUp.compareAndSet(false, true)) {
+                return;
+            }
             timer.stop();
             animation.stop();
-            if (!started[0] && playback != null) {
-                playback.discard();
+            if (playback != null) {
+                playback.stop();
             }
             layeredPane.remove(overlay);
             layeredPane.revalidate();
             layeredPane.repaint(overlay.getBounds());
+            if (onFinished != null) {
+                onFinished.run();
+            }
         };
 
         timer.addActionListener(e -> {
             long sinceCreatedMs = (System.nanoTime() - createdNanos) / 1_000_000L;
-            if (sinceCreatedMs > MAX_DISPLAY_MS || !overlay.isShowing() && started[0]) {
+            if (sinceCreatedMs > MAX_DISPLAY_MS || !layeredPane.isShowing() || !overlay.isShowing()) {
                 cleanup.run();
                 return;
             }
@@ -172,7 +204,7 @@ public final class CatOverlay {
         timer.setCoalesce(true);
         animation.start();
         timer.start();
-        return true;
+        return cleanup;
     }
 
     private static Component findAnchorComponent(Project project, JLayeredPane fallback) {

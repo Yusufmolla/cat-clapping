@@ -290,18 +290,11 @@ public final class CatClappingConfigurable implements SearchableConfigurable {
     }
 
     private void addCustomCommandsFromInput() {
-        if (customCommandField == null) {
+        List<String> tokens = pendingCustomTokens();
+        if (tokens.isEmpty()) {
             return;
         }
-        String raw = customCommandField.getText();
-        if (raw == null || raw.isBlank()) {
-            return;
-        }
-        for (String part : raw.split("[,;\\n]+")) {
-            String normalized = part.trim().toLowerCase(Locale.ROOT);
-            if (normalized.isEmpty()) {
-                continue;
-            }
+        for (String normalized : tokens) {
             if ("*".equals(normalized)) {
                 setAllSupportedSelected(true);
                 continue;
@@ -315,6 +308,24 @@ public final class CatClappingConfigurable implements SearchableConfigurable {
         }
         customCommandField.setText("");
         rebuildCustomCommandsPanel();
+    }
+
+    private List<String> pendingCustomTokens() {
+        if (customCommandField == null) {
+            return List.of();
+        }
+        String raw = customCommandField.getText();
+        if (raw == null || raw.isBlank()) {
+            return List.of();
+        }
+        List<String> tokens = new ArrayList<>();
+        for (String part : raw.split("[,;\\n]+")) {
+            String normalized = part.trim().toLowerCase(Locale.ROOT);
+            if (!normalized.isEmpty()) {
+                tokens.add(normalized);
+            }
+        }
+        return tokens;
     }
 
     private void rebuildCustomCommandsPanel() {
@@ -377,19 +388,38 @@ public final class CatClappingConfigurable implements SearchableConfigurable {
     }
 
     private void triggerTestCelebration() {
-        // Let the test button preview the values currently shown in the dialog.
-        if (isModified()) {
-            apply();
-        }
-        Project[] projects = ProjectManager.getInstance().getOpenProjects();
-        if (projects.length > 0) {
-            CelebrationService.getInstance(projects[0]).celebrate(true);
+        boolean soundEnabled = soundCheckBox.isSelected();
+        int volume = volumeSlider.getValue();
+        int size = sizeSlider.getValue();
+        double posX = positionPreview.getPosX();
+        double posY = positionPreview.getPosY();
+        CatAnchor anchor = anchorCombo.getSelectedItem() instanceof CatAnchor selected
+                ? selected
+                : CatAnchor.WINDOW;
+
+        Project target = findActiveProject();
+        if (target != null) {
+            CelebrationService.getInstance(target).celebratePreview(soundEnabled, volume, size, posX, posY, anchor);
         } else {
-            SoundPlayer.play();
+            SoundPlayer.play(soundEnabled, volume);
         }
     }
 
-    private List<String> collectSelectedCommands() {
+    private static @Nullable Project findActiveProject() {
+        Project[] projects = ProjectManager.getInstance().getOpenProjects();
+        if (projects.length == 0) {
+            return null;
+        }
+        for (Project project : projects) {
+            JFrame frame = WindowManager.getInstance().getFrame(project);
+            if (frame != null && frame.isActive()) {
+                return project;
+            }
+        }
+        return projects[0];
+    }
+
+    private List<String> collectSelectedCommands(boolean includePendingInput) {
         Set<String> selected = new LinkedHashSet<>();
         for (Map.Entry<String, JCheckBox> entry : supportedCheckBoxes.entrySet()) {
             if (entry.getValue().isSelected()) {
@@ -397,6 +427,15 @@ public final class CatClappingConfigurable implements SearchableConfigurable {
             }
         }
         selected.addAll(customCommands);
+        if (includePendingInput) {
+            for (String token : pendingCustomTokens()) {
+                if ("*".equals(token)) {
+                    selected.addAll(CommandMatcher.supportedCommandIds());
+                } else {
+                    selected.add(token);
+                }
+            }
+        }
         return new ArrayList<>(selected);
     }
 
@@ -411,7 +450,7 @@ public final class CatClappingConfigurable implements SearchableConfigurable {
     @Override
     public boolean isModified() {
         CatClappingSettings settings = CatClappingSettings.getInstance();
-        Set<String> currentSelection = new LinkedHashSet<>(collectSelectedCommands());
+        Set<String> currentSelection = new LinkedHashSet<>(collectSelectedCommands(true));
         Set<String> savedSelection = new LinkedHashSet<>(
                 CatClappingSettings.resolveCommandSelection(settings.getEnabledCommands()));
         return !currentSelection.equals(savedSelection)
@@ -425,8 +464,9 @@ public final class CatClappingConfigurable implements SearchableConfigurable {
 
     @Override
     public void apply() {
+        addCustomCommandsFromInput();
         CatClappingSettings settings = CatClappingSettings.getInstance();
-        settings.setEnabledCommands(collectSelectedCommands());
+        settings.setEnabledCommands(collectSelectedCommands(false));
         settings.setSoundEnabled(soundCheckBox.isSelected());
         settings.setVolumePercent(volumeSlider.getValue());
         settings.setCatSizePx(sizeSlider.getValue());
@@ -507,11 +547,12 @@ public final class CatClappingConfigurable implements SearchableConfigurable {
             setToolTipText("Click or drag the cat to position it");
 
             ApplicationManager.getApplication().executeOnPooledThread(() -> {
+                CatAnimation.rawSize();
                 BufferedImage preview = CatAnimation.firstFramePreview();
                 if (preview != null) {
                     catImage = preview;
-                    SwingUtilities.invokeLater(this::repaint);
                 }
+                SwingUtilities.invokeLater(this::repaint);
             });
 
             MouseAdapter mouseHandler = new MouseAdapter() {
@@ -585,21 +626,25 @@ public final class CatClappingConfigurable implements SearchableConfigurable {
             int usableH = anchor.height - cat.height - 2 * PREVIEW_MARGIN;
             double nextX = usableW > 0
                     ? (double) (targetX - anchor.x - PREVIEW_MARGIN) / usableW
-                    : 0.5;
+                    : posX;
             double nextY = usableH > 0
                     ? (double) (targetY - anchor.y - PREVIEW_MARGIN) / usableH
-                    : 0.0;
+                    : posY;
             setNormalizedPosition(nextX, nextY);
+        }
+
+        private static Rectangle editorPreviewBounds(int w, int h) {
+            int sidebarW = (int) Math.round(w * 0.22);
+            int topBarH = 14;
+            int terminalH = (int) Math.round(h * 0.27);
+            return new Rectangle(sidebarW, topBarH, w - sidebarW, h - topBarH - terminalH);
         }
 
         private Rectangle computeAnchorBounds() {
             int w = getWidth() > 0 ? getWidth() : getPreferredSize().width;
             int h = getHeight() > 0 ? getHeight() : getPreferredSize().height;
             if (anchorCombo != null && anchorCombo.getSelectedItem() == CatAnchor.EDITOR) {
-                int sidebarW = (int) Math.round(w * 0.22);
-                int topBarH = 14;
-                int terminalH = (int) Math.round(h * 0.27);
-                return new Rectangle(sidebarW, topBarH, w - sidebarW, h - topBarH - terminalH);
+                return editorPreviewBounds(w, h);
             }
             return new Rectangle(0, 0, w, h);
         }
@@ -608,7 +653,7 @@ public final class CatClappingConfigurable implements SearchableConfigurable {
             int w = getWidth() > 0 ? getWidth() : getPreferredSize().width;
             int h = getHeight() > 0 ? getHeight() : getPreferredSize().height;
 
-            int[] raw = CatAnimation.rawSize();
+            int[] raw = CatAnimation.cachedRawSize();
             int rawW = raw != null && raw[0] > 0 ? raw[0] : 576;
             int rawH = raw != null && raw[1] > 0 ? raw[1] : 1024;
             int desiredH = sizeSlider != null ? sizeSlider.getValue() : CatClappingSettings.DEFAULT_CAT_SIZE_PX;
@@ -657,20 +702,21 @@ public final class CatClappingConfigurable implements SearchableConfigurable {
                 g2.setColor(baseBg);
                 g2.fillRect(0, 0, w, h);
 
-                int sidebarW = (int) Math.round(w * 0.22);
-                int topBarH = 14;
-                int terminalH = (int) Math.round(h * 0.27);
+                Rectangle editorRect = editorPreviewBounds(w, h);
+                int sidebarW = editorRect.x;
+                int topBarH = editorRect.y;
+                int terminalY = editorRect.y + editorRect.height;
 
                 // Top bar, sidebar, bottom terminal blocks
                 g2.setColor(panelBg);
                 g2.fillRect(0, 0, w, topBarH);
                 g2.fillRect(0, topBarH, sidebarW, h - topBarH);
-                g2.fillRect(sidebarW, h - terminalH, w - sidebarW, terminalH);
+                g2.fillRect(sidebarW, terminalY, w - sidebarW, h - terminalY);
 
                 g2.setColor(new Color(border.getRed(), border.getGreen(), border.getBlue(), 140));
                 g2.drawLine(0, topBarH, w, topBarH);
                 g2.drawLine(sidebarW, topBarH, sidebarW, h);
-                g2.drawLine(sidebarW, h - terminalH, w, h - terminalH);
+                g2.drawLine(sidebarW, terminalY, w, terminalY);
 
                 // Highlight active anchor area
                 Rectangle anchor = computeAnchorBounds();

@@ -19,14 +19,14 @@ This repository contains both the **VS Code extension** and the **JetBrains IDE 
 
 ### Features
 
-- Animated clapping cat overlay at the top center of the active editor + celebration sound
+- Animated clapping cat overlay (configurable position & anchor area: **IDE Window** or **Active Editor**) + celebration sound
 - Detects successful **Run / Debug / Test** sessions (`ExecutionManager.EXECUTION_TOPIC`)
 - Detects successful **IDE Builds** (`BuildViewManager`, e.g. CMake / Make / Gradle)
 - Detects successful **Terminal commands** via JetBrains shell integration (new Terminal, IDE 2025.3+), including:
   - **Python:** `python`, `python3`, `py`, `pytest`, `uv run`, `uvx`, `uv build`, `poetry run`, `pdm run`, `pipenv run`
   - **C / C++ (macOS, Linux, Windows):** `gcc`, `cc`, `clang`, `g++`, `clang++`, `cl` / `cl.exe`, `cmake`, `ctest`, `make`, `mingw32-make`, `nmake`, `ninja`, `meson`, plus direct executables (`./main`, `./a.out`, `.\program.exe`, `./program.exe`, `program.exe`)
   - **Other runtimes/build tools:** `node`, `npm`, `npx`, `yarn`, `pnpm`, `cargo`, `go`, `dotnet`, `mvn`, `gradle`, `java`, `kotlin`, `swift`, etc.
-- Configurable under **Settings → Tools → Cat Clapping** (including a **Test Cat Clapping** button)
+- Configurable under **Settings → Tools → Cat Clapping** (selectable commands, custom commands, draggable window preview, size, volume, and a **Test Cat Clapping** button)
 
 ### Build & Release
 
@@ -37,7 +37,7 @@ cd jetbrains-plugin
 gradle check buildPlugin
 ```
 
-Or install the generated `jetbrains-plugin/build/distributions/cat-clapping-jetbrains-0.1.0.zip` in PyCharm/CLion via **Settings → Plugins → ⚙️ → Install Plugin from Disk...**.
+Or install the generated `jetbrains-plugin/build/distributions/cat-clapping-jetbrains-0.1.7.zip` in PyCharm/CLion via **Settings → Plugins → ⚙️ → Install Plugin from Disk...**.
 
 #### GitHub Release Workflow (no auto-build on `main`)
 
