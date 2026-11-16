@@ -133,6 +133,35 @@ public final class CommandMatcher {
         return SUPPORTED_IDS.contains(id.trim().toLowerCase(Locale.ROOT));
     }
 
+    /**
+     * Resolves stored command entries (including legacy {@code "*"}) into concrete command IDs
+     * matching the settings UI selection model.
+     */
+    public static List<String> resolveCommandSelection(List<String> stored) {
+        if (stored == null || stored.isEmpty()) {
+            return List.of();
+        }
+        Set<String> resolved = new LinkedHashSet<>();
+        boolean hasWildcard = false;
+        for (String item : stored) {
+            if (item == null) {
+                continue;
+            }
+            String normalized = item.trim().toLowerCase(Locale.ROOT);
+            if ("*".equals(normalized)) {
+                hasWildcard = true;
+            } else if (!normalized.isEmpty()) {
+                resolved.add(normalized);
+            }
+        }
+        if (hasWildcard) {
+            Set<String> withSupported = new LinkedHashSet<>(SUPPORTED_IDS);
+            withSupported.addAll(resolved);
+            return new ArrayList<>(withSupported);
+        }
+        return new ArrayList<>(resolved);
+    }
+
     public static String stripLeadingEnv(String command) {
         if (command == null) {
             return "";

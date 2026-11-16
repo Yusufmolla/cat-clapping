@@ -452,7 +452,7 @@ public final class CatClappingConfigurable implements SearchableConfigurable {
         CatClappingSettings settings = CatClappingSettings.getInstance();
         Set<String> currentSelection = new LinkedHashSet<>(collectSelectedCommands(true));
         Set<String> savedSelection = new LinkedHashSet<>(
-                CatClappingSettings.resolveCommandSelection(settings.getEnabledCommands()));
+                CommandMatcher.resolveCommandSelection(settings.getEnabledCommands()));
         return !currentSelection.equals(savedSelection)
                 || soundCheckBox.isSelected() != settings.isSoundEnabled()
                 || volumeSlider.getValue() != settings.getVolumePercent()
@@ -482,7 +482,7 @@ public final class CatClappingConfigurable implements SearchableConfigurable {
     public void reset() {
         CatClappingSettings settings = CatClappingSettings.getInstance();
         Set<String> resolved = new LinkedHashSet<>(
-                CatClappingSettings.resolveCommandSelection(settings.getEnabledCommands()));
+                CommandMatcher.resolveCommandSelection(settings.getEnabledCommands()));
         for (Map.Entry<String, JCheckBox> entry : supportedCheckBoxes.entrySet()) {
             entry.getValue().setSelected(resolved.contains(entry.getKey()));
         }

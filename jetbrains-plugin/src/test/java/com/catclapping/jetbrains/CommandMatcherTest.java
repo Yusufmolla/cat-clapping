@@ -142,12 +142,12 @@ public final class CommandMatcherTest {
         assertTrue(CommandMatcher.isBuildEnabled(defaults));
 
         // Settings migration & normalization
-        assertTrue(CatClappingSettings.resolveCommandSelection(null).isEmpty());
-        assertTrue(CatClappingSettings.resolveCommandSelection(List.of()).isEmpty());
-        assertTrue(CatClappingSettings.resolveCommandSelection(List.of("*")).equals(defaults));
-        List<String> withCustom = CatClappingSettings.resolveCommandSelection(List.of("*", "docker"));
+        assertTrue(CommandMatcher.resolveCommandSelection(null).isEmpty());
+        assertTrue(CommandMatcher.resolveCommandSelection(List.of()).isEmpty());
+        assertTrue(CommandMatcher.resolveCommandSelection(List.of("*")).equals(defaults));
+        List<String> withCustom = CommandMatcher.resolveCommandSelection(List.of("*", "docker"));
         assertTrue(withCustom.contains("python") && withCustom.contains("docker"));
-        List<String> normalized = CatClappingSettings.resolveCommandSelection(Arrays.asList(" Python ", null, "  "));
+        List<String> normalized = CommandMatcher.resolveCommandSelection(Arrays.asList(" Python ", null, "  "));
         assertTrue(normalized.equals(List.of("python")));
 
         // Position computation & clamping

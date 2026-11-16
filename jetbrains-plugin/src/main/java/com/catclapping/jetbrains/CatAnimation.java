@@ -1,6 +1,5 @@
 package com.catclapping.jetbrains;
 
-import com.intellij.openapi.diagnostic.Logger;
 import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
 
@@ -19,6 +18,8 @@ import java.util.Iterator;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.function.LongSupplier;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Decodes the clapping GIF frame by frame on a background thread, scaled to the requested size.
@@ -29,7 +30,7 @@ import java.util.function.LongSupplier;
  */
 final class CatAnimation {
 
-    private static final Logger LOG = Logger.getInstance(CatAnimation.class);
+    private static final Logger LOG = Logger.getLogger(CatAnimation.class.getName());
     private static final String GIF_RESOURCE = "/media/cat-clapping.gif";
     private static final String GIF_METADATA_FORMAT = "javax_imageio_gif_image_1.0";
     private static final int QUEUE_CAPACITY = 8;
@@ -122,7 +123,7 @@ final class CatAnimation {
             cachedFirstFramePreview = scaled;
             return scaled;
         } catch (Exception e) {
-            LOG.warn("Could not read preview GIF frame", e);
+            LOG.log(Level.WARNING, "Could not read preview GIF frame", e);
             return null;
         } finally {
             if (reader != null) {
@@ -154,7 +155,7 @@ final class CatAnimation {
             cachedRawSize = size;
             return size;
         } catch (Exception e) {
-            LOG.warn("Could not read GIF size", e);
+            LOG.log(Level.WARNING, "Could not read GIF size", e);
             return null;
         } finally {
             if (reader != null) {
@@ -172,12 +173,12 @@ final class CatAnimation {
             if (cachedGifBytes == null) {
                 try (InputStream raw = CatAnimation.class.getResourceAsStream(GIF_RESOURCE)) {
                     if (raw == null) {
-                        LOG.warn("GIF resource not found: " + GIF_RESOURCE);
+                        LOG.warning("GIF resource not found: " + GIF_RESOURCE);
                         return null;
                     }
                     cachedGifBytes = raw.readAllBytes();
                 } catch (IOException e) {
-                    LOG.warn("Could not load GIF resource", e);
+                    LOG.log(Level.WARNING, "Could not load GIF resource", e);
                     return null;
                 }
             }
@@ -251,7 +252,7 @@ final class CatAnimation {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } catch (Exception e) {
-            LOG.warn("GIF decoding failed", e);
+            LOG.log(Level.WARNING, "GIF decoding failed", e);
             failed = true;
         } finally {
             if (reader != null) {

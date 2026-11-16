@@ -9,10 +9,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
-import java.util.Set;
 
 /**
  * Persistent application settings for Cat Clapping.
@@ -68,35 +65,6 @@ public final class CatClappingSettings implements PersistentStateComponent<CatCl
 
     public void setEnabledCommands(List<String> commands) {
         state.enabledCommands = new ArrayList<>(commands);
-    }
-
-    /**
-     * Resolves stored command entries (including legacy {@code "*"}) into concrete command IDs
-     * matching the settings UI selection model.
-     */
-    public static List<String> resolveCommandSelection(List<String> stored) {
-        if (stored == null || stored.isEmpty()) {
-            return List.of();
-        }
-        Set<String> resolved = new LinkedHashSet<>();
-        boolean hasWildcard = false;
-        for (String item : stored) {
-            if (item == null) {
-                continue;
-            }
-            String normalized = item.trim().toLowerCase(Locale.ROOT);
-            if ("*".equals(normalized)) {
-                hasWildcard = true;
-            } else if (!normalized.isEmpty()) {
-                resolved.add(normalized);
-            }
-        }
-        if (hasWildcard) {
-            Set<String> withSupported = new LinkedHashSet<>(CommandMatcher.supportedCommandIds());
-            withSupported.addAll(resolved);
-            return new ArrayList<>(withSupported);
-        }
-        return new ArrayList<>(resolved);
     }
 
     public boolean isSoundEnabled() {
