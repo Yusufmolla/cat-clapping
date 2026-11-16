@@ -26,14 +26,17 @@ public final class CatClappingSettings implements PersistentStateComponent<CatCl
         public boolean soundEnabled = true;
         public int volumePercent = DEFAULT_VOLUME_PERCENT;
         public int catSizePx = DEFAULT_CAT_SIZE_PX;
-        public CatPosition catPosition = CatPosition.TOP_CENTER;
-        public CatAnchor catAnchor = CatAnchor.EDITOR;
+        public double catPosX = DEFAULT_CAT_POS_X;
+        public double catPosY = DEFAULT_CAT_POS_Y;
+        public CatAnchor catAnchor = CatAnchor.WINDOW;
     }
 
     public static final int DEFAULT_VOLUME_PERCENT = 80;
     public static final int DEFAULT_CAT_SIZE_PX = 520;
     public static final int MIN_CAT_SIZE_PX = 80;
     public static final int MAX_CAT_SIZE_PX = 1000;
+    public static final double DEFAULT_CAT_POS_X = 0.5;
+    public static final double DEFAULT_CAT_POS_Y = 0.0;
 
     private State state = new State();
 
@@ -52,11 +55,10 @@ public final class CatClappingSettings implements PersistentStateComponent<CatCl
         if (this.state.enabledCommands == null) {
             this.state.enabledCommands = new ArrayList<>();
         }
-        if (this.state.catPosition == null) {
-            this.state.catPosition = CatPosition.TOP_CENTER;
-        }
+        this.state.catPosX = CatPlacement.clampNormalized(this.state.catPosX);
+        this.state.catPosY = CatPlacement.clampNormalized(this.state.catPosY);
         if (this.state.catAnchor == null) {
-            this.state.catAnchor = CatAnchor.EDITOR;
+            this.state.catAnchor = CatAnchor.WINDOW;
         }
     }
 
@@ -121,20 +123,28 @@ public final class CatClappingSettings implements PersistentStateComponent<CatCl
         state.catSizePx = clamp(catSizePx, MIN_CAT_SIZE_PX, MAX_CAT_SIZE_PX);
     }
 
-    public CatPosition getCatPosition() {
-        return state.catPosition != null ? state.catPosition : CatPosition.TOP_CENTER;
+    public double getCatPosX() {
+        return CatPlacement.clampNormalized(state.catPosX);
     }
 
-    public void setCatPosition(CatPosition catPosition) {
-        state.catPosition = catPosition != null ? catPosition : CatPosition.TOP_CENTER;
+    public void setCatPosX(double catPosX) {
+        state.catPosX = CatPlacement.clampNormalized(catPosX);
+    }
+
+    public double getCatPosY() {
+        return CatPlacement.clampNormalized(state.catPosY);
+    }
+
+    public void setCatPosY(double catPosY) {
+        state.catPosY = CatPlacement.clampNormalized(catPosY);
     }
 
     public CatAnchor getCatAnchor() {
-        return state.catAnchor != null ? state.catAnchor : CatAnchor.EDITOR;
+        return state.catAnchor != null ? state.catAnchor : CatAnchor.WINDOW;
     }
 
     public void setCatAnchor(CatAnchor catAnchor) {
-        state.catAnchor = catAnchor != null ? catAnchor : CatAnchor.EDITOR;
+        state.catAnchor = catAnchor != null ? catAnchor : CatAnchor.WINDOW;
     }
 
     private static int clamp(int value, int min, int max) {

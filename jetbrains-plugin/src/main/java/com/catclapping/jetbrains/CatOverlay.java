@@ -108,7 +108,7 @@ public final class CatOverlay {
         Component anchor = settings.getCatAnchor() == CatAnchor.WINDOW
                 ? layeredPane
                 : findAnchorComponent(project, layeredPane);
-        Point location = computeLocation(settings.getCatPosition(), anchor, layeredPane, targetW, targetH);
+        Point location = computeLocation(settings.getCatPosX(), settings.getCatPosY(), anchor, layeredPane, targetW, targetH);
         overlay.setBounds(location.x, location.y, targetW, targetH);
         layeredPane.add(overlay, JLayeredPane.POPUP_LAYER);
         layeredPane.revalidate();
@@ -189,19 +189,22 @@ public final class CatOverlay {
     }
 
     private static Point computeLocation(
-            CatPosition position,
+            double posX,
+            double posY,
             Component anchor,
             JLayeredPane layeredPane,
             int width,
             int height) {
         if (anchor == layeredPane || !anchor.isShowing()) {
-            return position.computePoint(
+            return CatPlacement.computePoint(
+                    posX, posY,
                     0, 0, layeredPane.getWidth(), layeredPane.getHeight(),
                     layeredPane.getWidth(), layeredPane.getHeight(),
                     width, height, EDGE_MARGIN_PX);
         }
         Point anchorOrigin = SwingUtilities.convertPoint(anchor, 0, 0, layeredPane);
-        return position.computePoint(
+        return CatPlacement.computePoint(
+                posX, posY,
                 anchorOrigin.x, anchorOrigin.y, anchor.getWidth(), anchor.getHeight(),
                 layeredPane.getWidth(), layeredPane.getHeight(),
                 width, height, EDGE_MARGIN_PX);

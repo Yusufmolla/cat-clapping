@@ -1,8 +1,10 @@
 package com.catclapping.jetbrains;
 
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.options.SearchableConfigurable;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.project.ProjectManager;
+import com.intellij.openapi.wm.WindowManager;
 import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -14,19 +16,31 @@ import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
+import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSlider;
 import javax.swing.JTextField;
+import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
+import java.awt.BasicStroke;
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
 import java.awt.GridLayout;
 import java.awt.Insets;
+import java.awt.Point;
+import java.awt.Rectangle;
+import java.awt.RenderingHints;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -50,8 +64,9 @@ public final class CatClappingConfigurable implements SearchableConfigurable {
     private JLabel volumeValueLabel;
     private JSlider sizeSlider;
     private JLabel sizeValueLabel;
-    private JComboBox<CatPosition> positionCombo;
     private JComboBox<CatAnchor> anchorCombo;
+    private PositionPreviewPanel positionPreview;
+    private JLabel positionReadoutLabel;
 
     @Override
     public @NotNull String getId() {
@@ -72,7 +87,7 @@ public final class CatClappingConfigurable implements SearchableConfigurable {
         form.add(buildCommandsSection());
         form.add(Box.createVerticalStrut(10));
         form.add(buildCustomCommandsSection());
-        form.add(Box.createVerticalStrut(14));
+        form.add(Box.createVerticalStrut(12));
 
         soundCheckBox = new JCheckBox("Play celebration sound");
         soundCheckBox.setAlignmentX(JComponent.LEFT_ALIGNMENT);
@@ -95,14 +110,17 @@ public final class CatClappingConfigurable implements SearchableConfigurable {
         sizeSlider.setMajorTickSpacing(100);
         sizeSlider.setPaintTicks(true);
         sizeValueLabel = new JLabel();
-        sizeSlider.addChangeListener(e -> sizeValueLabel.setText(sizeSlider.getValue() + " px"));
+        sizeSlider.addChangeListener(e -> {
+            sizeValueLabel.setText(sizeSlider.getValue() + " px");
+            if (positionPreview != null) {
+                positionPreview.repaint();
+            }
+        });
         form.add(sliderRow("Cat size (height):", sizeSlider, sizeValueLabel));
 
-        form.add(Box.createVerticalStrut(8));
-
-        form.add(buildPositionRow());
-
-        form.add(Box.createVerticalStrut(14));
+        form.add(Box.createVerticalStrut(10));
+        form.add(buildPositionSection());
+        form.add(Box.createVerticalStrut(12));
 
         JPanel testRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         JButton testButton = new JButton("Test Cat Clapping");
@@ -171,8 +189,8 @@ public final class CatClappingConfigurable implements SearchableConfigurable {
         }
 
         JScrollPane scrollPane = new JScrollPane(listPanel);
-        scrollPane.setPreferredSize(new Dimension(560, 230));
-        scrollPane.setMaximumSize(new Dimension(Integer.MAX_VALUE, 260));
+        scrollPane.setPreferredSize(new Dimension(560, 185));
+        scrollPane.setMaximumSize(new Dimension(Integer.MAX_VALUE, 210));
         scrollPane.getVerticalScrollBar().setUnitIncrement(16);
         section.add(scrollPane, BorderLayout.CENTER);
 
@@ -205,24 +223,64 @@ public final class CatClappingConfigurable implements SearchableConfigurable {
         return section;
     }
 
-    private JPanel buildPositionRow() {
-        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        JLabel label = new JLabel("Display position:");
-        label.setPreferredSize(new Dimension(130, label.getPreferredSize().height));
-        row.add(label);
-        row.add(Box.createHorizontalStrut(8));
+    private JPanel buildPositionSection() {
+        JPanel section = new JPanel(new BorderLayout(12, 0));
+        section.setAlignmentX(JComponent.LEFT_ALIGNMENT);
 
-        positionCombo = new JComboBox<>(CatPosition.values());
-        row.add(positionCombo);
-        row.add(Box.createHorizontalStrut(8));
-        row.add(new JLabel("in"));
-        row.add(Box.createHorizontalStrut(8));
+        JLabel title = new JLabel("Screen position:");
+        title.setPreferredSize(new Dimension(130, title.getPreferredSize().height));
+        title.setVerticalAlignment(JLabel.TOP);
+        section.add(title, BorderLayout.WEST);
 
+        JPanel body = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        positionPreview = new PositionPreviewPanel();
+        body.add(positionPreview);
+        body.add(Box.createHorizontalStrut(14));
+
+        JPanel sideControls = new JPanel();
+        sideControls.setLayout(new BoxLayout(sideControls, BoxLayout.Y_AXIS));
+
+        JLabel dragHint = new JLabel("Drag the cat to place it:");
+        dragHint.setAlignmentX(JComponent.LEFT_ALIGNMENT);
+        sideControls.add(dragHint);
+        sideControls.add(Box.createVerticalStrut(6));
+
+        JPanel anchorRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        anchorRow.add(new JLabel("Area: "));
         anchorCombo = new JComboBox<>(CatAnchor.values());
-        row.add(anchorCombo);
+        anchorCombo.addActionListener(e -> {
+            if (positionPreview != null) {
+                positionPreview.repaint();
+            }
+        });
+        anchorRow.add(anchorCombo);
+        anchorRow.setAlignmentX(JComponent.LEFT_ALIGNMENT);
+        sideControls.add(anchorRow);
+        sideControls.add(Box.createVerticalStrut(8));
 
-        row.setAlignmentX(JComponent.LEFT_ALIGNMENT);
-        return row;
+        positionReadoutLabel = new JLabel();
+        Color muted = UIManager.getColor("Label.disabledForeground");
+        if (muted != null) {
+            positionReadoutLabel.setForeground(muted);
+        }
+        positionReadoutLabel.setAlignmentX(JComponent.LEFT_ALIGNMENT);
+        sideControls.add(positionReadoutLabel);
+        sideControls.add(Box.createVerticalStrut(8));
+
+        JPanel quickButtons = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        JButton centerBtn = new JButton("Center");
+        centerBtn.addActionListener(e -> positionPreview.setNormalizedPosition(0.5, 0.5));
+        JButton topCenterBtn = new JButton("Top Center");
+        topCenterBtn.addActionListener(e -> positionPreview.setNormalizedPosition(
+                CatClappingSettings.DEFAULT_CAT_POS_X, CatClappingSettings.DEFAULT_CAT_POS_Y));
+        quickButtons.add(centerBtn);
+        quickButtons.add(topCenterBtn);
+        quickButtons.setAlignmentX(JComponent.LEFT_ALIGNMENT);
+        sideControls.add(quickButtons);
+
+        body.add(sideControls);
+        section.add(body, BorderLayout.CENTER);
+        return section;
     }
 
     private void setAllSupportedSelected(boolean selected) {
@@ -342,6 +400,14 @@ public final class CatClappingConfigurable implements SearchableConfigurable {
         return new ArrayList<>(selected);
     }
 
+    private void updatePositionReadout(double posX, double posY) {
+        if (positionReadoutLabel != null) {
+            int xPct = (int) Math.round(posX * 100.0);
+            int yPct = (int) Math.round(posY * 100.0);
+            positionReadoutLabel.setText("Position: " + xPct + "% X, " + yPct + "% Y");
+        }
+    }
+
     @Override
     public boolean isModified() {
         CatClappingSettings settings = CatClappingSettings.getInstance();
@@ -352,7 +418,8 @@ public final class CatClappingConfigurable implements SearchableConfigurable {
                 || soundCheckBox.isSelected() != settings.isSoundEnabled()
                 || volumeSlider.getValue() != settings.getVolumePercent()
                 || sizeSlider.getValue() != settings.getCatSizePx()
-                || positionCombo.getSelectedItem() != settings.getCatPosition()
+                || Math.abs(positionPreview.getPosX() - settings.getCatPosX()) > 0.001
+                || Math.abs(positionPreview.getPosY() - settings.getCatPosY()) > 0.001
                 || anchorCombo.getSelectedItem() != settings.getCatAnchor();
     }
 
@@ -363,10 +430,8 @@ public final class CatClappingConfigurable implements SearchableConfigurable {
         settings.setSoundEnabled(soundCheckBox.isSelected());
         settings.setVolumePercent(volumeSlider.getValue());
         settings.setCatSizePx(sizeSlider.getValue());
-        Object selectedPos = positionCombo.getSelectedItem();
-        if (selectedPos instanceof CatPosition pos) {
-            settings.setCatPosition(pos);
-        }
+        settings.setCatPosX(positionPreview.getPosX());
+        settings.setCatPosY(positionPreview.getPosY());
         Object selectedAnchor = anchorCombo.getSelectedItem();
         if (selectedAnchor instanceof CatAnchor anchor) {
             settings.setCatAnchor(anchor);
@@ -404,11 +469,251 @@ public final class CatClappingConfigurable implements SearchableConfigurable {
             sizeSlider.setValue(settings.getCatSizePx());
             sizeValueLabel.setText(sizeSlider.getValue() + " px");
         }
-        if (positionCombo != null) {
-            positionCombo.setSelectedItem(settings.getCatPosition());
-        }
         if (anchorCombo != null) {
             anchorCombo.setSelectedItem(settings.getCatAnchor());
+        }
+        if (positionPreview != null) {
+            positionPreview.setNormalizedPosition(settings.getCatPosX(), settings.getCatPosY());
+        }
+    }
+
+    /**
+     * Interactive mini IDE window where the user can drag the cat to set its overlay position.
+     */
+    private final class PositionPreviewPanel extends JPanel {
+
+        private static final int PREVIEW_HEIGHT = 170;
+        private static final int PREVIEW_MARGIN = 4;
+
+        private final int refWindowW;
+        private final int refWindowH;
+        private double posX = CatClappingSettings.DEFAULT_CAT_POS_X;
+        private double posY = CatClappingSettings.DEFAULT_CAT_POS_Y;
+        private volatile BufferedImage catImage;
+        private boolean dragging;
+        private int grabOffsetX;
+        private int grabOffsetY;
+
+        PositionPreviewPanel() {
+            Dimension frameSize = resolveIdeWindowSize();
+            this.refWindowW = frameSize.width;
+            this.refWindowH = frameSize.height;
+            int previewW = Math.max(240, Math.min(340,
+                    (int) Math.round(PREVIEW_HEIGHT * ((double) refWindowW / refWindowH))));
+            setPreferredSize(new Dimension(previewW, PREVIEW_HEIGHT));
+            setMinimumSize(new Dimension(previewW, PREVIEW_HEIGHT));
+            setMaximumSize(new Dimension(previewW, PREVIEW_HEIGHT));
+            setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            setToolTipText("Click or drag the cat to position it");
+
+            ApplicationManager.getApplication().executeOnPooledThread(() -> {
+                BufferedImage preview = CatAnimation.firstFramePreview();
+                if (preview != null) {
+                    catImage = preview;
+                    SwingUtilities.invokeLater(this::repaint);
+                }
+            });
+
+            MouseAdapter mouseHandler = new MouseAdapter() {
+                @Override
+                public void mousePressed(MouseEvent e) {
+                    Rectangle catRect = computeCatBounds();
+                    if (catRect.contains(e.getPoint())) {
+                        grabOffsetX = e.getX() - catRect.x;
+                        grabOffsetY = e.getY() - catRect.y;
+                    } else {
+                        grabOffsetX = catRect.width / 2;
+                        grabOffsetY = catRect.height / 2;
+                        updateFromMouse(e.getX(), e.getY());
+                    }
+                    dragging = true;
+                    setCursor(Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR));
+                }
+
+                @Override
+                public void mouseDragged(MouseEvent e) {
+                    if (dragging) {
+                        updateFromMouse(e.getX(), e.getY());
+                    }
+                }
+
+                @Override
+                public void mouseReleased(MouseEvent e) {
+                    dragging = false;
+                    updateHoverCursor(e.getPoint());
+                }
+
+                @Override
+                public void mouseMoved(MouseEvent e) {
+                    updateHoverCursor(e.getPoint());
+                }
+            };
+            addMouseListener(mouseHandler);
+            addMouseMotionListener(mouseHandler);
+        }
+
+        double getPosX() {
+            return posX;
+        }
+
+        double getPosY() {
+            return posY;
+        }
+
+        void setNormalizedPosition(double x, double y) {
+            this.posX = CatPlacement.clampNormalized(x);
+            this.posY = CatPlacement.clampNormalized(y);
+            updatePositionReadout(this.posX, this.posY);
+            repaint();
+        }
+
+        private void updateHoverCursor(Point p) {
+            if (dragging || computeCatBounds().contains(p)) {
+                setCursor(Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR));
+            } else {
+                setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            }
+        }
+
+        private void updateFromMouse(int mouseX, int mouseY) {
+            Rectangle anchor = computeAnchorBounds();
+            Rectangle cat = computeCatBounds();
+            int targetX = mouseX - grabOffsetX;
+            int targetY = mouseY - grabOffsetY;
+
+            int usableW = anchor.width - cat.width - 2 * PREVIEW_MARGIN;
+            int usableH = anchor.height - cat.height - 2 * PREVIEW_MARGIN;
+            double nextX = usableW > 0
+                    ? (double) (targetX - anchor.x - PREVIEW_MARGIN) / usableW
+                    : 0.5;
+            double nextY = usableH > 0
+                    ? (double) (targetY - anchor.y - PREVIEW_MARGIN) / usableH
+                    : 0.0;
+            setNormalizedPosition(nextX, nextY);
+        }
+
+        private Rectangle computeAnchorBounds() {
+            int w = getWidth() > 0 ? getWidth() : getPreferredSize().width;
+            int h = getHeight() > 0 ? getHeight() : getPreferredSize().height;
+            if (anchorCombo != null && anchorCombo.getSelectedItem() == CatAnchor.EDITOR) {
+                int sidebarW = (int) Math.round(w * 0.22);
+                int topBarH = 14;
+                int terminalH = (int) Math.round(h * 0.27);
+                return new Rectangle(sidebarW, topBarH, w - sidebarW, h - topBarH - terminalH);
+            }
+            return new Rectangle(0, 0, w, h);
+        }
+
+        private Rectangle computeCatBounds() {
+            int w = getWidth() > 0 ? getWidth() : getPreferredSize().width;
+            int h = getHeight() > 0 ? getHeight() : getPreferredSize().height;
+
+            int[] raw = CatAnimation.rawSize();
+            int rawW = raw != null && raw[0] > 0 ? raw[0] : 576;
+            int rawH = raw != null && raw[1] > 0 ? raw[1] : 1024;
+            int desiredH = sizeSlider != null ? sizeSlider.getValue() : CatClappingSettings.DEFAULT_CAT_SIZE_PX;
+            int effectiveRealH = Math.min(desiredH, Math.max(refWindowH - 16, 32));
+            int catH = Math.max(18, Math.min(h - 2 * PREVIEW_MARGIN,
+                    (int) Math.round(effectiveRealH * ((double) h / refWindowH))));
+            int catW = Math.max(10, (int) Math.round(catH * ((double) rawW / rawH)));
+
+            Rectangle anchor = computeAnchorBounds();
+            Point p = CatPlacement.computePoint(
+                    posX, posY,
+                    anchor.x, anchor.y, anchor.width, anchor.height,
+                    w, h,
+                    catW, catH, PREVIEW_MARGIN);
+            return new Rectangle(p.x, p.y, catW, catH);
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            Graphics2D g2 = (Graphics2D) g.create();
+            try {
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+
+                int w = getWidth();
+                int h = getHeight();
+                Color baseBg = UIManager.getColor("TextField.background");
+                if (baseBg == null) {
+                    baseBg = new Color(43, 45, 48);
+                }
+                Color panelBg = UIManager.getColor("Panel.background");
+                if (panelBg == null) {
+                    panelBg = new Color(60, 63, 65);
+                }
+                Color border = UIManager.getColor("Component.borderColor");
+                if (border == null) {
+                    border = Color.GRAY;
+                }
+                Color accent = UIManager.getColor("Component.focusColor");
+                if (accent == null) {
+                    accent = new Color(75, 139, 244);
+                }
+
+                // IDE window chrome
+                g2.setColor(baseBg);
+                g2.fillRect(0, 0, w, h);
+
+                int sidebarW = (int) Math.round(w * 0.22);
+                int topBarH = 14;
+                int terminalH = (int) Math.round(h * 0.27);
+
+                // Top bar, sidebar, bottom terminal blocks
+                g2.setColor(panelBg);
+                g2.fillRect(0, 0, w, topBarH);
+                g2.fillRect(0, topBarH, sidebarW, h - topBarH);
+                g2.fillRect(sidebarW, h - terminalH, w - sidebarW, terminalH);
+
+                g2.setColor(new Color(border.getRed(), border.getGreen(), border.getBlue(), 140));
+                g2.drawLine(0, topBarH, w, topBarH);
+                g2.drawLine(sidebarW, topBarH, sidebarW, h);
+                g2.drawLine(sidebarW, h - terminalH, w, h - terminalH);
+
+                // Highlight active anchor area
+                Rectangle anchor = computeAnchorBounds();
+                if (anchorCombo != null && anchorCombo.getSelectedItem() == CatAnchor.EDITOR) {
+                    g2.setColor(new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), 24));
+                    g2.fillRect(anchor.x, anchor.y, anchor.width, anchor.height);
+                    g2.setColor(new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), 120));
+                    g2.drawRect(anchor.x, anchor.y, Math.max(0, anchor.width - 1), Math.max(0, anchor.height - 1));
+                }
+
+                // Draw cat preview
+                Rectangle cat = computeCatBounds();
+                BufferedImage img = catImage;
+                if (img != null) {
+                    g2.drawImage(img, cat.x, cat.y, cat.width, cat.height, null);
+                } else {
+                    g2.setColor(new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), 70));
+                    g2.fillRoundRect(cat.x, cat.y, cat.width, cat.height, 6, 6);
+                }
+
+                // Grab outline around cat
+                g2.setColor(accent);
+                g2.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND,
+                        0, new float[]{4f, 3f}, 0));
+                g2.drawRoundRect(cat.x, cat.y, Math.max(1, cat.width - 1), Math.max(1, cat.height - 1), 6, 6);
+
+                // Outer border
+                g2.setStroke(new BasicStroke(1f));
+                g2.setColor(border);
+                g2.drawRect(0, 0, w - 1, h - 1);
+            } finally {
+                g2.dispose();
+            }
+        }
+
+        private static Dimension resolveIdeWindowSize() {
+            for (Project project : ProjectManager.getInstance().getOpenProjects()) {
+                JFrame frame = WindowManager.getInstance().getFrame(project);
+                if (frame != null && frame.getWidth() > 0 && frame.getHeight() > 0) {
+                    return new Dimension(frame.getWidth(), frame.getHeight());
+                }
+            }
+            return new Dimension(1440, 900);
         }
     }
 }

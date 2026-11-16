@@ -36,6 +36,7 @@ final class CatAnimation {
 
     private static volatile byte[] cachedGifBytes;
     private static volatile int[] cachedRawSize;
+    private static volatile BufferedImage cachedFirstFramePreview;
 
     static final class Frame {
         final BufferedImage image;
@@ -98,6 +99,36 @@ final class CatAnimation {
 
     boolean isFailed() {
         return failed;
+    }
+
+    /** Cached downscaled first GIF frame for the settings position preview, or null on failure. */
+    static BufferedImage firstFramePreview() {
+        BufferedImage cached = cachedFirstFramePreview;
+        if (cached != null) {
+            return cached;
+        }
+        byte[] bytes = gifBytes();
+        if (bytes == null) {
+            return null;
+        }
+        ImageReader reader = null;
+        try (ImageInputStream in = ImageIO.createImageInputStream(new ByteArrayInputStream(bytes))) {
+            reader = gifReader();
+            reader.setInput(in, false);
+            BufferedImage raw = reader.read(0);
+            int targetH = 220;
+            int targetW = Math.max(1, (int) Math.round(raw.getWidth() * ((double) targetH / Math.max(1, raw.getHeight()))));
+            BufferedImage scaled = draw(raw, targetW, targetH);
+            cachedFirstFramePreview = scaled;
+            return scaled;
+        } catch (Exception e) {
+            LOG.warn("Could not read preview GIF frame", e);
+            return null;
+        } finally {
+            if (reader != null) {
+                reader.dispose();
+            }
+        }
     }
 
     /** Raw GIF size {width, height}, or null if it cannot be read. */

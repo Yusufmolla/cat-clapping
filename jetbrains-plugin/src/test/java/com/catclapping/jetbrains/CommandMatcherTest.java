@@ -107,14 +107,15 @@ public final class CommandMatcherTest {
         assertTrue(CommandMatcher.isBuildEnabled(defaults));
 
         // Position computation & clamping
-        assertPoint(CatPosition.TOP_LEFT.computePoint(100, 50, 800, 600, 1200, 900, 200, 300, 8), 108, 58);
-        assertPoint(CatPosition.TOP_CENTER.computePoint(100, 50, 800, 600, 1200, 900, 200, 300, 8), 400, 58);
-        assertPoint(CatPosition.TOP_RIGHT.computePoint(100, 50, 800, 600, 1200, 900, 200, 300, 8), 692, 58);
-        assertPoint(CatPosition.CENTER.computePoint(0, 0, 1000, 800, 1000, 800, 200, 300, 8), 400, 250);
-        assertPoint(CatPosition.BOTTOM_RIGHT.computePoint(0, 0, 1000, 800, 1000, 800, 200, 300, 8), 792, 492);
-        // Clamping when anchor extends beyond container
-        assertPoint(CatPosition.BOTTOM_RIGHT.computePoint(0, 0, 1500, 1200, 1000, 800, 200, 300, 8), 800, 500);
-        assertPoint(CatPosition.TOP_LEFT.computePoint(-50, -50, 500, 500, 1000, 800, 200, 300, 8), 0, 0);
+        assertPoint(CatPlacement.computePoint(0.0, 0.0, 100, 50, 800, 600, 1200, 900, 200, 300, 8), 108, 58);
+        assertPoint(CatPlacement.computePoint(0.5, 0.0, 100, 50, 800, 600, 1200, 900, 200, 300, 8), 400, 58);
+        assertPoint(CatPlacement.computePoint(1.0, 0.0, 100, 50, 800, 600, 1200, 900, 200, 300, 8), 692, 58);
+        assertPoint(CatPlacement.computePoint(0.5, 0.5, 0, 0, 1000, 800, 1000, 800, 200, 300, 8), 400, 250);
+        assertPoint(CatPlacement.computePoint(1.0, 1.0, 0, 0, 1000, 800, 1000, 800, 200, 300, 8), 792, 492);
+        // Clamping when anchor extends beyond container or values exceed [0, 1]
+        assertPoint(CatPlacement.computePoint(2.0, 2.0, 0, 0, 1500, 1200, 1000, 800, 200, 300, 8), 800, 500);
+        assertPoint(CatPlacement.computePoint(-1.0, -1.0, -50, -50, 500, 500, 1000, 800, 200, 300, 8), 0, 0);
+        assertTrue(CatPlacement.clampNormalized(Double.NaN) == 0.0);
 
         System.out.println("All CommandMatcherTest assertions passed!");
     }
