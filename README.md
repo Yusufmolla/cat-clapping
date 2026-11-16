@@ -2,7 +2,7 @@
 
 Celebrate successful builds, runs, tests, and debug sessions with a clapping cat and sound effect.
 
-This repository contains both the **VS Code extension** and the **JetBrains IDE plugin** (PyCharm, CLion, IntelliJ IDEA, WebStorm, etc.) for **macOS, Linux, and Windows**.
+**JetBrains IDE plugin** (PyCharm, CLion, IntelliJ IDEA, WebStorm, etc.) for **macOS, Linux, and Windows**.
 
 ## Preview
 
@@ -10,14 +10,7 @@ This repository contains both the **VS Code extension** and the **JetBrains IDE 
 
 ![Cat Clapping Settings](docs/media/screenshot-settings.png)
 
-## Repository Structure
-
-- `extension/` — Original VS Code extension (`cat-clapping` by `nicosmartworking` / Nicola, see [extension/LICENSE.txt](extension/LICENSE.txt))
-- `jetbrains-plugin/` — JetBrains Platform plugin (PyCharm, CLion, IntelliJ IDEA, etc.) by Yusuf Molla
-
-## JetBrains Plugin (PyCharm, CLion, ...)
-
-### Features
+## Features
 
 - Animated clapping cat overlay (configurable position & anchor area: **IDE Window** or **Active Editor**) + celebration sound
 - Detects successful **Run / Debug / Test** sessions (`ExecutionManager.EXECUTION_TOPIC`)
@@ -28,7 +21,7 @@ This repository contains both the **VS Code extension** and the **JetBrains IDE 
   - **Other runtimes/build tools:** `node`, `npm`, `npx`, `yarn`, `pnpm`, `cargo`, `go`, `dotnet`, `mvn`, `gradle`, `java`, `kotlin`, `swift`, etc.
 - Configurable under **Settings → Tools → Cat Clapping** (selectable commands, custom commands, draggable window preview, size, volume, and a **Test Cat Clapping** button)
 
-### Build & Release
+## Build & Release
 
 With Gradle:
 
@@ -39,7 +32,7 @@ gradle check buildPlugin
 
 Or install the generated `jetbrains-plugin/build/distributions/cat-clapping-jetbrains-0.1.7.zip` in PyCharm/CLion via **Settings → Plugins → ⚙️ → Install Plugin from Disk...**.
 
-#### GitHub Release Workflow (no auto-build on `main`)
+### GitHub Release Workflow (no auto-build on `main`)
 
 The workflow [.github/workflows/release.yml](.github/workflows/release.yml) only runs on version tags (`v*`) or manually via **Actions → Build & Release → Run workflow**:
 
@@ -50,4 +43,4 @@ git push origin v0.1.0
 
 ## License
 
-[MIT](LICENSE) — Original VS Code extension & assets © 2026 Nicola (`nicosmartworking`), JetBrains plugin © 2026 Yusuf Molla.
+[MIT](LICENSE) — Original media assets © 2026 Nicola (`nicosmartworking`), JetBrains plugin © 2026 Yusuf Molla.
