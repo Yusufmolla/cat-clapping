@@ -13,6 +13,62 @@ import java.util.regex.Pattern;
  */
 public final class CommandMatcher {
 
+    /**
+     * Metadata for a built-in command or trigger category displayed in the settings UI.
+     */
+    public record SupportedCommand(String id, String label, String category) {
+    }
+
+    private static final List<SupportedCommand> SUPPORTED_COMMANDS = List.of(
+            // IDE & General
+            new SupportedCommand("tasks", "IDE Run / Build tasks", "IDE & General"),
+            new SupportedCommand("debug", "Debug sessions", "IDE & General"),
+            new SupportedCommand("executable", "Executables (./app, *.exe)", "IDE & General"),
+            // Python
+            new SupportedCommand("python", "python / py / pytest", "Python"),
+            new SupportedCommand("uv", "uv / uvx", "Python"),
+            new SupportedCommand("poetry", "poetry", "Python"),
+            new SupportedCommand("pdm", "pdm", "Python"),
+            new SupportedCommand("pipenv", "pipenv", "Python"),
+            // C / C++
+            new SupportedCommand("gcc", "gcc / cc", "C / C++"),
+            new SupportedCommand("clang", "clang", "C / C++"),
+            new SupportedCommand("g++", "g++", "C / C++"),
+            new SupportedCommand("clang++", "clang++", "C / C++"),
+            new SupportedCommand("cl", "cl / cl.exe", "C / C++"),
+            new SupportedCommand("cmake", "cmake / ctest", "C / C++"),
+            new SupportedCommand("make", "make / nmake / mingw32-make", "C / C++"),
+            new SupportedCommand("ninja", "ninja", "C / C++"),
+            new SupportedCommand("meson", "meson", "C / C++"),
+            // JavaScript / TypeScript
+            new SupportedCommand("node", "node / tsx / bun / deno", "JavaScript / TypeScript"),
+            new SupportedCommand("npm", "npm / npx", "JavaScript / TypeScript"),
+            new SupportedCommand("yarn", "yarn", "JavaScript / TypeScript"),
+            new SupportedCommand("pnpm", "pnpm", "JavaScript / TypeScript"),
+            new SupportedCommand("tsc", "tsc", "JavaScript / TypeScript"),
+            // Java & JVM
+            new SupportedCommand("java", "java", "Java & JVM"),
+            new SupportedCommand("kotlin", "kotlin", "Java & JVM"),
+            new SupportedCommand("mvn", "mvn / mvnw", "Java & JVM"),
+            new SupportedCommand("gradle", "gradle / gradlew", "Java & JVM"),
+            // Other Languages & Tools
+            new SupportedCommand("cargo", "cargo", "Other Languages & Tools"),
+            new SupportedCommand("go", "go", "Other Languages & Tools"),
+            new SupportedCommand("dotnet", "dotnet", "Other Languages & Tools"),
+            new SupportedCommand("swift", "swift", "Other Languages & Tools"),
+            new SupportedCommand("ruby", "ruby", "Other Languages & Tools"),
+            new SupportedCommand("php", "php", "Other Languages & Tools"),
+            new SupportedCommand("perl", "perl", "Other Languages & Tools"),
+            new SupportedCommand("lua", "lua", "Other Languages & Tools"),
+            new SupportedCommand("rscript", "rscript", "Other Languages & Tools"),
+            new SupportedCommand("bash", "bash / sh / zsh", "Other Languages & Tools"),
+            new SupportedCommand("sf", "sf / sfdx", "Other Languages & Tools")
+    );
+
+    private static final Set<String> SUPPORTED_IDS = SUPPORTED_COMMANDS.stream()
+            .map(SupportedCommand::id)
+            .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+
     private static final Pattern ENV_PREFIX = Pattern.compile(
             "^\\s*(?:[A-Za-z_][A-Za-z0-9_]*=(?:\"[^\"]*\"|'[^']*'|\\S+)\\s+)+");
 
@@ -31,7 +87,7 @@ public final class CommandMatcher {
             Pattern.CASE_INSENSITIVE);
 
     private static final Pattern RUNNER_SUBCOMMAND = Pattern.compile(
-            "^(?:(?:dotnet|cargo|go)\\s+run\\b|(?:uv|poetry|pdm|pipenv)\\s+run\\b|(?:npm|pnpm|yarn)\\s+(?:run\\s+\\S+|start\\b|test\\b|exec\\b)|npx\\s+\\S+)",
+            "^(?:(?:dotnet|cargo|go)\\s+(?:run|test)\\b|(?:uv|poetry|pdm|pipenv)\\s+run\\b|(?:npm|pnpm|yarn)\\s+(?:run\\s+\\S+|start\\b|test\\b|exec\\b)|npx\\s+\\S+)",
             Pattern.CASE_INSENSITIVE);
 
     private static final List<Pattern> BUILD_PATTERNS = List.of(
@@ -62,6 +118,50 @@ public final class CommandMatcher {
     private CommandMatcher() {
     }
 
+    public static List<SupportedCommand> supportedCommands() {
+        return SUPPORTED_COMMANDS;
+    }
+
+    public static List<String> supportedCommandIds() {
+        return new ArrayList<>(SUPPORTED_IDS);
+    }
+
+    public static boolean isSupportedCommandId(String id) {
+        if (id == null) {
+            return false;
+        }
+        return SUPPORTED_IDS.contains(id.trim().toLowerCase(Locale.ROOT));
+    }
+
+    /**
+     * Resolves stored command entries (including legacy {@code "*"}) into concrete command IDs
+     * matching the settings UI selection model.
+     */
+    public static List<String> resolveCommandSelection(List<String> stored) {
+        if (stored == null || stored.isEmpty()) {
+            return List.of();
+        }
+        Set<String> resolved = new LinkedHashSet<>();
+        boolean hasWildcard = false;
+        for (String item : stored) {
+            if (item == null) {
+                continue;
+            }
+            String normalized = item.trim().toLowerCase(Locale.ROOT);
+            if ("*".equals(normalized)) {
+                hasWildcard = true;
+            } else if (!normalized.isEmpty()) {
+                resolved.add(normalized);
+            }
+        }
+        if (hasWildcard) {
+            Set<String> withSupported = new LinkedHashSet<>(SUPPORTED_IDS);
+            withSupported.addAll(resolved);
+            return new ArrayList<>(withSupported);
+        }
+        return new ArrayList<>(resolved);
+    }
+
     public static String stripLeadingEnv(String command) {
         if (command == null) {
             return "";
@@ -88,7 +188,7 @@ public final class CommandMatcher {
     }
 
     public static boolean isRunCommand(String command) {
-        String invocation = stripLeadingEnv(command).replaceFirst("^&\\s+", "");
+        String invocation = stripLeadingEnv(command).replaceFirst("^&\\s*", "");
         if (invocation.isEmpty()) {
             return false;
         }
@@ -137,6 +237,27 @@ public final class CommandMatcher {
             selectors.add("c");
             selectors.add("cpp");
         }
+        if ("cc".equals(stem)) {
+            selectors.add("gcc");
+        }
+        if ("ctest".equals(stem)) {
+            selectors.add("cmake");
+        }
+        if ("mingw32-make".equals(stem) || "nmake".equals(stem)) {
+            selectors.add("make");
+        }
+        if ("mvnw".equals(stem)) {
+            selectors.add("mvn");
+        }
+        if ("gradlew".equals(stem)) {
+            selectors.add("gradle");
+        }
+        if ("sh".equals(stem) || "zsh".equals(stem)) {
+            selectors.add("bash");
+        }
+        if ("sfdx".equals(stem)) {
+            selectors.add("sf");
+        }
         if (token.matches("^(?:\\./|\\.\\\\|~/|/|[a-z]:[\\\\/]).*") || name.endsWith(".exe")) {
             selectors.add("executable");
         }
@@ -148,16 +269,95 @@ public final class CommandMatcher {
             return false;
         }
         List<String> choices = normalizeChoices(enabled);
-        boolean supported = isBuildCommand(command) || isRunCommand(command);
-        if (choices.contains("*") && supported) {
-            return true;
+        if (choices.isEmpty()) {
+            return false;
         }
-        for (String selector : commandSelectors(command)) {
-            if (choices.contains(selector)) {
+        Set<String> choiceSet = new LinkedHashSet<>(choices);
+        boolean wildcard = choiceSet.contains("*");
+        Set<String> customChoices = new LinkedHashSet<>();
+        for (String choice : choiceSet) {
+            if (!"*".equals(choice) && !SUPPORTED_IDS.contains(choice)) {
+                customChoices.add(choice);
+            }
+        }
+
+        for (String segment : splitShellSegments(command)) {
+            if (segment.isBlank()) {
+                continue;
+            }
+            if (!customChoices.isEmpty() && matchesCustomSegment(segment, customChoices)) {
                 return true;
+            }
+            boolean supported = isBuildCommand(segment) || isRunCommand(segment);
+            if (!supported) {
+                continue;
+            }
+            if (wildcard) {
+                return true;
+            }
+            for (String selector : commandSelectors(segment)) {
+                if (choiceSet.contains(selector)) {
+                    return true;
+                }
             }
         }
         return false;
+    }
+
+    private static boolean matchesCustomSegment(String segment, Set<String> customChoices) {
+        for (String selector : commandSelectors(segment)) {
+            if (customChoices.contains(selector)) {
+                return true;
+            }
+        }
+        String normalizedSegment = stripLeadingEnv(segment)
+                .replaceFirst("^&\\s*", "")
+                .replaceAll("\\s+", " ")
+                .trim()
+                .toLowerCase(Locale.ROOT);
+        if (normalizedSegment.isEmpty()) {
+            return false;
+        }
+        for (String choice : customChoices) {
+            if (choice.indexOf(' ') >= 0) {
+                String normalizedChoice = choice.replaceAll("\\s+", " ").trim();
+                if (normalizedSegment.equals(normalizedChoice)
+                        || normalizedSegment.startsWith(normalizedChoice + " ")) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static List<String> splitShellSegments(String command) {
+        List<String> segments = new ArrayList<>();
+        int start = 0;
+        char quote = 0;
+        int len = command.length();
+        for (int i = 0; i < len; i++) {
+            char c = command.charAt(i);
+            if (quote != 0) {
+                if (c == '\\' && quote == '"' && i + 1 < len) {
+                    i++;
+                } else if (c == quote) {
+                    quote = 0;
+                }
+                continue;
+            }
+            if (c == '\'' || c == '"') {
+                quote = c;
+            } else if (c == ';') {
+                segments.add(command.substring(start, i));
+                start = i + 1;
+            } else if ((c == '&' || c == '|') && i + 1 < len && command.charAt(i + 1) == c) {
+                segments.add(command.substring(start, i));
+                i++;
+                start = i + 1;
+            }
+        }
+        segments.add(command.substring(start));
+        return segments;
     }
 
     public static boolean isRunConfigurationEnabled(
@@ -172,41 +372,72 @@ public final class CommandMatcher {
         if (choices.contains("*")) {
             return true;
         }
-        if (isDebug && choices.contains("debug")) {
-            return true;
-        }
-        if (choices.contains("tasks")) {
-            return true;
+        if (isDebug) {
+            return choices.contains("debug");
         }
         Set<String> selectors = new LinkedHashSet<>();
-        if (profileName != null && !profileName.isBlank()) {
-            selectors.add(profileName.toLowerCase(Locale.ROOT));
-            selectors.addAll(commandSelectors(profileName));
-        }
+        boolean recognizedConfig = false;
         if (configTypeId != null && !configTypeId.isBlank()) {
             String type = configTypeId.toLowerCase(Locale.ROOT);
             selectors.add(type);
-            if (type.contains("python") || type.contains("pytest")) {
+            if (type.contains("python") || type.contains("pytest") || type.contains("django")) {
                 selectors.add("python");
                 selectors.add("py");
+                recognizedConfig = true;
             }
             if (type.contains("cmake") || type.contains("cidr") || type.contains("cpp") || type.contains("clion")) {
                 selectors.add("c");
                 selectors.add("cpp");
                 selectors.add("cmake");
                 selectors.add("executable");
+                recognizedConfig = true;
             }
-            if (type.contains("node") || type.contains("javascript") || type.contains("npm")) {
+            if (type.contains("node") || type.contains("javascript") || type.contains("npm")
+                    || type.contains("jest") || type.contains("vitest") || type.contains("mocha")) {
                 selectors.add("node");
                 selectors.add("npm");
+                recognizedConfig = true;
             }
+            if (type.contains("gradle")) {
+                selectors.add("gradle");
+                recognizedConfig = true;
+            }
+            if (type.contains("maven")) {
+                selectors.add("mvn");
+                recognizedConfig = true;
+            }
+            if ("application".equals(type) || type.contains("junit") || type.contains("testng")
+                    || type.contains("jarapplication")) {
+                selectors.add("java");
+                recognizedConfig = true;
+            }
+            if (type.contains("kotlin") || type.contains("jetrun")) {
+                selectors.add("kotlin");
+                recognizedConfig = true;
+            }
+            if (type.contains("cargo") || type.contains("rust")) {
+                selectors.add("cargo");
+                recognizedConfig = true;
+            }
+            if (type.contains("goapplication") || type.contains("gotest") || type.contains("goland")) {
+                selectors.add("go");
+                recognizedConfig = true;
+            }
+            if (type.contains("dotnet") || type.contains("coreclr") || type.contains("rider")) {
+                selectors.add("dotnet");
+                recognizedConfig = true;
+            }
+        }
+        if (profileName != null && !profileName.isBlank()) {
+            selectors.add(profileName.toLowerCase(Locale.ROOT));
+            selectors.addAll(commandSelectors(profileName));
         }
         for (String selector : selectors) {
             if (choices.contains(selector)) {
                 return true;
             }
         }
-        return false;
+        return !recognizedConfig && choices.contains("tasks");
     }
 
     public static boolean isBuildEnabled(List<String> enabled) {
@@ -214,12 +445,15 @@ public final class CommandMatcher {
             return false;
         }
         List<String> choices = normalizeChoices(enabled);
-        return choices.contains("*")
-                || choices.contains("tasks")
-                || choices.contains("build")
-                || choices.contains("cmake")
-                || choices.contains("c")
-                || choices.contains("cpp");
+        for (String id : List.of("*", "tasks", "build", "cmake", "c", "cpp",
+                "gradle", "mvn", "make", "ninja", "meson",
+                "gcc", "clang", "g++", "clang++", "cl",
+                "tsc", "cargo", "go", "dotnet")) {
+            if (choices.contains(id)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static List<String> normalizeChoices(List<String> enabled) {

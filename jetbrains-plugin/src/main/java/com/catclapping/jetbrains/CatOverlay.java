@@ -19,15 +19,16 @@ import java.awt.GraphicsConfiguration;
 import java.awt.Point;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.LongSupplier;
 
 /**
- * Displays the animated clapping cat at the top center of the active editor (or IDE frame).
+ * Displays the animated clapping cat at the configured position in the active editor or IDE window.
  * The animation is driven by the audio position so clapping and sound stay in sync.
  */
 public final class CatOverlay {
 
-    private static final int TOP_MARGIN_PX = 8;
+    private static final int EDGE_MARGIN_PX = 8;
     private static final int TICK_MS = 10;
     private static final int PREBUFFER_FRAMES = 4;
     private static final long MAX_PREBUFFER_WAIT_MS = 3000L;
@@ -37,28 +38,36 @@ public final class CatOverlay {
     }
 
     /**
-     * Shows the cat. If {@code playback} is not null it is started at the same moment the animation starts.
+     * Shows the cat with explicit placement parameters and returns an idempotent cleanup handle, or null if not shown.
      * Must be called on the EDT.
      */
-    public static boolean show(Project project, SoundPlayer.Playback playback) {
+    static Runnable showOverlay(
+            Project project,
+            SoundPlayer.Playback playback,
+            int desiredSizePx,
+            double posX,
+            double posY,
+            CatAnchor anchorType,
+            Runnable onFinished) {
         JFrame frame = WindowManager.getInstance().getFrame(project);
         if (frame == null || !frame.isShowing()) {
-            return false;
+            return null;
         }
         JRootPane rootPane = frame.getRootPane();
         if (rootPane == null) {
-            return false;
+            return null;
         }
         int[] raw = CatAnimation.rawSize();
         if (raw == null) {
-            return false;
+            return null;
         }
 
         int rawW = Math.max(raw[0], 1);
         int rawH = Math.max(raw[1], 1);
         JLayeredPane layeredPane = rootPane.getLayeredPane();
-        int desiredH = CatClappingSettings.getInstance().getCatSizePx();
-        int availableH = layeredPane.getHeight() > 0 ? layeredPane.getHeight() - 2 * TOP_MARGIN_PX : desiredH;
+        int desiredH = Math.max(CatClappingSettings.MIN_CAT_SIZE_PX,
+                Math.min(CatClappingSettings.MAX_CAT_SIZE_PX, desiredSizePx));
+        int availableH = layeredPane.getHeight() > 0 ? layeredPane.getHeight() - 2 * EDGE_MARGIN_PX : desiredH;
         int maxH = Math.max(Math.min(desiredH, availableH), 32);
         double scale = (double) maxH / rawH;
         int targetW = Math.max((int) Math.round(rawW * scale), 16);
@@ -104,30 +113,40 @@ public final class CatOverlay {
         };
         overlay.setOpaque(false);
 
-        Component anchor = findAnchorComponent(project, layeredPane);
-        Point topCenter = computeTopCenter(anchor, layeredPane, targetW, targetH);
-        overlay.setBounds(topCenter.x, topCenter.y, targetW, targetH);
+        CatAnchor resolvedAnchor = anchorType != null ? anchorType : CatAnchor.WINDOW;
+        Component anchor = resolvedAnchor == CatAnchor.WINDOW
+                ? layeredPane
+                : findAnchorComponent(project, layeredPane);
+        Point location = computeLocation(posX, posY, anchor, layeredPane, targetW, targetH);
+        overlay.setBounds(location.x, location.y, targetW, targetH);
         layeredPane.add(overlay, JLayeredPane.POPUP_LAYER);
         layeredPane.revalidate();
 
         final long createdNanos = System.nanoTime();
         final boolean[] started = {false};
         final long[] lastFrameEndMs = {0L};
+        final AtomicBoolean cleanedUp = new AtomicBoolean(false);
         Timer timer = new Timer(TICK_MS, null);
         Runnable cleanup = () -> {
+            if (!cleanedUp.compareAndSet(false, true)) {
+                return;
+            }
             timer.stop();
             animation.stop();
-            if (!started[0] && playback != null) {
-                playback.discard();
+            if (playback != null) {
+                playback.stop();
             }
             layeredPane.remove(overlay);
             layeredPane.revalidate();
             layeredPane.repaint(overlay.getBounds());
+            if (onFinished != null) {
+                onFinished.run();
+            }
         };
 
         timer.addActionListener(e -> {
             long sinceCreatedMs = (System.nanoTime() - createdNanos) / 1_000_000L;
-            if (sinceCreatedMs > MAX_DISPLAY_MS || !overlay.isShowing() && started[0]) {
+            if (sinceCreatedMs > MAX_DISPLAY_MS || !layeredPane.isShowing() || !overlay.isShowing()) {
                 cleanup.run();
                 return;
             }
@@ -169,7 +188,7 @@ public final class CatOverlay {
         timer.setCoalesce(true);
         animation.start();
         timer.start();
-        return true;
+        return cleanup;
     }
 
     private static Component findAnchorComponent(Project project, JLayeredPane fallback) {
@@ -185,14 +204,25 @@ public final class CatOverlay {
         return fallback;
     }
 
-    private static Point computeTopCenter(Component anchor, JLayeredPane layeredPane, int width, int height) {
+    private static Point computeLocation(
+            double posX,
+            double posY,
+            Component anchor,
+            JLayeredPane layeredPane,
+            int width,
+            int height) {
         if (anchor == layeredPane || !anchor.isShowing()) {
-            int x = Math.max((layeredPane.getWidth() - width) / 2, 0);
-            return new Point(x, TOP_MARGIN_PX);
+            return CatPlacement.computePoint(
+                    posX, posY,
+                    0, 0, layeredPane.getWidth(), layeredPane.getHeight(),
+                    layeredPane.getWidth(), layeredPane.getHeight(),
+                    width, height, EDGE_MARGIN_PX);
         }
-        Point point = SwingUtilities.convertPoint(anchor, (anchor.getWidth() - width) / 2, TOP_MARGIN_PX, layeredPane);
-        int clampedX = Math.max(0, Math.min(point.x, Math.max(layeredPane.getWidth() - width, 0)));
-        int clampedY = Math.max(0, Math.min(point.y, Math.max(layeredPane.getHeight() - height, 0)));
-        return new Point(clampedX, clampedY);
+        Point anchorOrigin = SwingUtilities.convertPoint(anchor, 0, 0, layeredPane);
+        return CatPlacement.computePoint(
+                posX, posY,
+                anchorOrigin.x, anchorOrigin.y, anchor.getWidth(), anchor.getHeight(),
+                layeredPane.getWidth(), layeredPane.getHeight(),
+                width, height, EDGE_MARGIN_PX);
     }
 }
