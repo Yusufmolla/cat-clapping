@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>de.yusufmolla.catclapping</id>
     <name>Cat Clapping</name>
-    <version>0.1.8</version>
+    <version>0.2.0</version>
     <vendor url="https://github.com/Yusufmolla/cat-clapping">YusufMolla</vendor>
 
     <description><![CDATA[
@@ -16,6 +16,12 @@
     ]]></description>
 
     <change-notes><![CDATA[
+    <h3>0.2.0</h3>
+    <ul>
+      <li>Added the animated <b>HUH Cat</b> error reaction (with timed <code>HUH</code> caption and synchronized sound) for failed Run/Debug/Test sessions, failed IDE builds, and failing terminal commands, ignoring manual Ctrl+C / Stop cancellations.</li>
+      <li>Added independent enable/disable toggles (both enabled by default) and separate tabs (<b>Clapping Cat (Success)</b> and <b>HUH Cat (Error)</b>) in <b>Settings &rarr; Tools &rarr; Cat Clapping</b> with per-reaction commands, custom commands, sound/volume, size, draggable position preview, and test buttons.</li>
+      <li>Added selectable <b>HUH clip</b> mode (<b>2nd HUH only (Default)</b>, <b>1st HUH only</b>, or <b>Full (both HUHs)</b>) with synchronized GIF and audio slicing.</li>
+    </ul>
     <h3>0.1.8</h3>
     <ul>
       <li>Added selectable supported commands and custom terminal commands in <b>Settings &rarr; Tools &rarr; Cat Clapping</b>.</li>
