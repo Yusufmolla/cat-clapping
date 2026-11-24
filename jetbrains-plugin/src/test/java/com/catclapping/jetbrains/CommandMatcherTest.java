@@ -1,17 +1,22 @@
 package com.catclapping.jetbrains;
 
+import javax.sound.sampled.AudioFormat;
+import javax.sound.sampled.AudioInputStream;
+import javax.sound.sampled.AudioSystem;
 import java.awt.Point;
 import java.awt.image.BufferedImage;
+import java.io.BufferedInputStream;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
 /**
- * Self-contained unit checks for CommandMatcher, CatPlacement, CatClappingSettings, and CatAnimation.
+ * Self-contained unit checks for CommandMatcher, CatReaction, CatPlacement, and CatAnimation.
  */
 public final class CommandMatcherTest {
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
         List<String> wildcard = List.of("*");
         List<String> defaults = CommandMatcher.supportedCommandIds();
 
@@ -141,6 +146,20 @@ public final class CommandMatcherTest {
         assertTrue(!CommandMatcher.isBuildEnabled(List.of("debug")));
         assertTrue(CommandMatcher.isBuildEnabled(defaults));
 
+        // Exit code error classification (ignores 0 and manual cancellation signals)
+        assertTrue(!CommandMatcher.isErrorExitCode(0));
+        assertTrue(!CommandMatcher.isErrorExitCode(130));
+        assertTrue(!CommandMatcher.isErrorExitCode(143));
+        assertTrue(!CommandMatcher.isErrorExitCode(0xC000013A));
+        assertTrue(CommandMatcher.isErrorExitCode(1));
+        assertTrue(CommandMatcher.isErrorExitCode(2));
+        assertTrue(CommandMatcher.isErrorExitCode(127));
+        assertTrue(CommandMatcher.isErrorExitCode(134));
+        assertTrue(CommandMatcher.isErrorExitCode(136));
+        assertTrue(CommandMatcher.isErrorExitCode(137));
+        assertTrue(CommandMatcher.isErrorExitCode(139));
+        assertTrue(CommandMatcher.isErrorExitCode(-1));
+
         // Settings migration & normalization
         assertTrue(CommandMatcher.resolveCommandSelection(null).isEmpty());
         assertTrue(CommandMatcher.resolveCommandSelection(List.of()).isEmpty());
@@ -161,14 +180,83 @@ public final class CommandMatcherTest {
         assertPoint(CatPlacement.computePoint(-1.0, -1.0, -50, -50, 500, 500, 1000, 800, 200, 300, 8), 0, 0);
         assertTrue(CatPlacement.clampNormalized(Double.NaN) == 0.0);
 
-        // Bundled GIF metadata & preview smoke check
-        int[] gifSize = CatAnimation.rawSize();
-        assertTrue(gifSize != null && gifSize[0] > 0 && gifSize[1] > 0);
-        assertTrue(CatAnimation.cachedRawSize() != null);
-        BufferedImage preview = CatAnimation.firstFramePreview();
-        assertTrue(preview != null && preview.getHeight() == 220 && preview.getWidth() > 0);
+        // Reaction metadata & bundled GIF/WAV smoke checks
+        for (CatReaction reaction : CatReaction.values()) {
+            assertTrue(reaction.displayName() != null && !reaction.displayName().isBlank());
+            assertTrue(reaction.gifResource() != null && reaction.audioResource() != null);
+            assertTrue(reaction.defaultSizePx() > 0);
+            assertTrue(reaction.fallbackRawWidth() > 0 && reaction.fallbackRawHeight() > 0);
+
+            int[] gifSize = CatAnimation.rawSize(reaction);
+            assertTrue(gifSize != null && gifSize[0] > 0 && gifSize[1] > 0);
+            assertTrue(CatAnimation.cachedRawSize(reaction) != null);
+
+            BufferedImage preview = CatAnimation.firstFramePreview(reaction);
+            assertTrue(preview != null && preview.getHeight() == 220 && preview.getWidth() > 0);
+            assertHasOpaquePixels(preview);
+
+            verifyBundledWav(reaction);
+        }
+
+        int[] clappingSize = CatAnimation.rawSize(CatReaction.CLAPPING);
+        assertTrue(clappingSize[0] == 576 && clappingSize[1] == 1024);
+        int[] huhSize = CatAnimation.rawSize(CatReaction.HUH);
+        assertTrue(huhSize[0] == 404 && huhSize[1] == 540);
+
+        // Full frame-by-frame decode check for cat-huh.gif
+        verifyFullDecode(CatReaction.HUH, 202, 270, 105);
 
         System.out.println("All CommandMatcherTest assertions passed!");
+    }
+
+    private static void verifyBundledWav(CatReaction reaction) throws Exception {
+        try (InputStream raw = CommandMatcherTest.class.getResourceAsStream(reaction.audioResource())) {
+            assertTrue(raw != null);
+            try (BufferedInputStream buffered = new BufferedInputStream(raw);
+                 AudioInputStream audioStream = AudioSystem.getAudioInputStream(buffered)) {
+                AudioFormat format = audioStream.getFormat();
+                assertTrue(format.getEncoding() == AudioFormat.Encoding.PCM_SIGNED);
+                assertTrue(Math.abs(format.getSampleRate() - 44100.0f) < 1.0f);
+                assertTrue(format.getChannels() == 2);
+                assertTrue(format.getSampleSizeInBits() == 16);
+                assertTrue(audioStream.getFrameLength() > 0);
+            }
+        }
+    }
+
+    private static void verifyFullDecode(
+            CatReaction reaction,
+            int targetW,
+            int targetH,
+            int expectedFrames) throws InterruptedException {
+        CatAnimation anim = new CatAnimation(reaction, targetW, targetH, () -> 0L);
+        anim.start();
+        int count = 0;
+        long deadlineNanos = System.nanoTime() + 15_000_000_000L;
+        while (!(anim.isFinished() && anim.peek() == null)) {
+            CatAnimation.Frame frame = anim.poll();
+            if (frame != null) {
+                assertTrue(frame.image != null);
+                assertTrue(frame.image.getWidth() == targetW && frame.image.getHeight() == targetH);
+                count++;
+            } else {
+                assertTrue(System.nanoTime() < deadlineNanos);
+                Thread.sleep(5);
+            }
+        }
+        assertTrue(!anim.isFailed());
+        assertTrue(count == expectedFrames);
+    }
+
+    private static void assertHasOpaquePixels(BufferedImage img) {
+        for (int y = 0; y < img.getHeight(); y++) {
+            for (int x = 0; x < img.getWidth(); x++) {
+                if (((img.getRGB(x, y) >>> 24) & 0xFF) > 0) {
+                    return;
+                }
+            }
+        }
+        throw new AssertionError("Expected at least one opaque pixel in preview image");
     }
 
     private static void assertEnabled(String command, List<String> enabled) {

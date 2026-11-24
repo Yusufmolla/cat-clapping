@@ -6,12 +6,13 @@ import com.intellij.openapi.components.Service;
 import com.intellij.openapi.project.Project;
 
 import javax.swing.SwingUtilities;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Coordinates cooldown-throttled celebration overlays and audio for a project.
+ * Coordinates cooldown-throttled cat reaction overlays and audio for a project.
  */
 @Service(Service.Level.PROJECT)
 public final class CelebrationService implements Disposable {
@@ -31,28 +32,37 @@ public final class CelebrationService implements Disposable {
         return project.getService(CelebrationService.class);
     }
 
-    public void celebrate() {
+    public void trigger(CatReaction reaction) {
+        Objects.requireNonNull(reaction, "reaction");
         CatClappingSettings settings = CatClappingSettings.getInstance();
-        trigger(false,
-                settings.isSoundEnabled(),
-                settings.getVolumePercent(),
-                settings.getCatSizePx(),
-                settings.getCatPosX(),
-                settings.getCatPosY(),
-                settings.getCatAnchor());
+        if (!settings.isEnabled(reaction)) {
+            return;
+        }
+        triggerInternal(
+                reaction,
+                false,
+                settings.isSoundEnabled(reaction),
+                settings.getVolumePercent(reaction),
+                settings.getCatSizePx(reaction),
+                settings.getCatPosX(reaction),
+                settings.getCatPosY(reaction),
+                settings.getCatAnchor(reaction));
     }
 
-    void celebratePreview(
+    void triggerPreview(
+            CatReaction reaction,
             boolean soundEnabled,
             int volumePercent,
             int catSizePx,
             double catPosX,
             double catPosY,
             CatAnchor catAnchor) {
-        trigger(true, soundEnabled, volumePercent, catSizePx, catPosX, catPosY, catAnchor);
+        Objects.requireNonNull(reaction, "reaction");
+        triggerInternal(reaction, true, soundEnabled, volumePercent, catSizePx, catPosX, catPosY, catAnchor);
     }
 
-    private void trigger(
+    private void triggerInternal(
+            CatReaction reaction,
             boolean ignoreCooldown,
             boolean soundEnabled,
             int volumePercent,
@@ -80,8 +90,8 @@ public final class CelebrationService implements Disposable {
             if (isDisposed()) {
                 return;
             }
-            CatAnimation.rawSize();
-            SoundPlayer.Playback playback = soundEnabled ? SoundPlayer.prepare(volumePercent) : null;
+            CatAnimation.rawSize(reaction);
+            SoundPlayer.Playback playback = soundEnabled ? SoundPlayer.prepare(reaction, volumePercent) : null;
             ApplicationManager.getApplication().invokeLater(() -> {
                 if (isDisposed()) {
                     if (playback != null) {
@@ -96,6 +106,7 @@ public final class CelebrationService implements Disposable {
                 final Runnable[] holder = {null};
                 Runnable cleanup = CatOverlay.showOverlay(
                         project,
+                        reaction,
                         playback,
                         catSizePx,
                         catPosX,

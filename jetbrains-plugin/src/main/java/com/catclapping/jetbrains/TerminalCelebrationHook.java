@@ -93,8 +93,14 @@ public final class TerminalCelebrationHook implements ProjectActivity {
                             TerminalCommandBlock block = event.getCommandBlock();
                             Integer exitCode = block.getExitCode();
                             String command = block.getExecutedCommand();
-                            if (exitCode != null && exitCode == 0 && command != null) {
-                                onTerminalCommandSucceeded(command, celebrationService);
+                            if (exitCode == null || command == null) {
+                                return;
+                            }
+                            CatReaction reaction = exitCode == 0
+                                    ? CatReaction.CLAPPING
+                                    : (CommandMatcher.isErrorExitCode(exitCode) ? CatReaction.HUH : null);
+                            if (reaction != null) {
+                                onTerminalCommandFinished(command, reaction, celebrationService);
                             }
                         }
                     });
@@ -105,9 +111,14 @@ public final class TerminalCelebrationHook implements ProjectActivity {
         }
     }
 
-    private static void onTerminalCommandSucceeded(String command, CelebrationService celebrationService) {
-        if (CommandMatcher.isCommandEnabled(command, CatClappingSettings.getInstance().getEnabledCommands())) {
-            celebrationService.celebrate();
+    private static void onTerminalCommandFinished(
+            String command,
+            CatReaction reaction,
+            CelebrationService celebrationService) {
+        CatClappingSettings settings = CatClappingSettings.getInstance();
+        if (settings.isEnabled(reaction)
+                && CommandMatcher.isCommandEnabled(command, settings.getEnabledCommands(reaction))) {
+            celebrationService.trigger(reaction);
         }
     }
 }

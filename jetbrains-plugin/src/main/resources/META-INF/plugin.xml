@@ -5,14 +5,14 @@
     <vendor url="https://github.com/Yusufmolla/cat-clapping">YusufMolla</vendor>
 
     <description><![CDATA[
-    <p>Celebrate successful builds, runs, tests, debug sessions, and terminal commands with an animated clapping cat and celebration sound directly inside your IDE.</p>
+    <p>React to builds, runs, tests, debug sessions, and terminal commands directly inside your IDE: celebrate successes with the animated <b>Clapping Cat</b> and react to errors with the confused <b>HUH Cat</b> (with synchronized sound).</p>
     <p><b>Supported triggers:</b></p>
     <ul>
-      <li><b>Run, Debug &amp; Test configurations</b> exiting with code 0 across PyCharm, CLion, IntelliJ IDEA, WebStorm, GoLand, and other IntelliJ-based IDEs.</li>
-      <li><b>IDE Builds</b> (e.g. CMake, Make, Gradle, Maven) finishing successfully.</li>
+      <li><b>Run, Debug &amp; Test configurations</b> across PyCharm, CLion, IntelliJ IDEA, WebStorm, GoLand, and other IntelliJ-based IDEs (Clapping Cat on exit code 0; HUH Cat on failures, ignoring manual Ctrl+C / Stop cancellations).</li>
+      <li><b>IDE Builds</b> (e.g. CMake, Make, Gradle, Maven) on build success or failure.</li>
       <li><b>Integrated Terminal commands</b> via shell integration (new Terminal), including Python (<code>python</code>, <code>pytest</code>, <code>uv run</code>, <code>poetry run</code>), C/C++ (<code>gcc</code>, <code>cc</code>, <code>clang</code>, <code>g++</code>, <code>clang++</code>, <code>cl.exe</code>, <code>cmake</code>, <code>make</code>, <code>ninja</code>, and compiled executables on macOS, Linux, and Windows), Node.js, Rust, Go, .NET, and Java.</li>
     </ul>
-    <p>Configure enabled commands, toggle audio, or preview the animation anytime under <b>Settings &rarr; Tools &rarr; Cat Clapping</b>.</p>
+    <p>Both reactions are enabled by default and can be toggled or configured independently (commands, sound, volume, size, screen position, and preview) under <b>Settings &rarr; Tools &rarr; Cat Clapping</b>.</p>
     ]]></description>
 
     <change-notes><![CDATA[

@@ -15,56 +15,61 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Plays the bundled celebration WAV sound across macOS, Linux, and Windows.
+ * Plays the bundled reaction WAV sounds across macOS, Linux, and Windows.
  * <p>
- * Use {@link #prepare(int)} off the EDT to open the audio line in advance, then {@link Playback#start()}
+ * Use {@link #prepare(CatReaction, int)} off the EDT to open the audio line in advance, then {@link Playback#start()}
  * at the exact moment the animation starts. {@link Playback#positionMs()} reports how much audio has
  * actually been played so the animation can follow the sound.
  */
 public final class SoundPlayer {
 
     private static final Logger LOG = Logger.getInstance(SoundPlayer.class);
-    private static final String AUDIO_RESOURCE = "/media/cat-clapping.wav";
     /** Rough start-up latency of external players such as afplay. */
     private static final long OS_PLAYER_LATENCY_MS = 80L;
-    private static volatile Path cachedTempAudioFile;
+    private static final Map<CatReaction, Path> CACHED_TEMP_AUDIO_FILES = new ConcurrentHashMap<>();
 
     private SoundPlayer() {
     }
 
-    /** Fire-and-forget playback for explicit sound/volume values. */
-    public static void play(boolean soundEnabled, int volumePercent) {
+    /** Fire-and-forget playback for explicit reaction, sound toggle, and volume. */
+    public static void play(CatReaction reaction, boolean soundEnabled, int volumePercent) {
+        Objects.requireNonNull(reaction, "reaction");
         if (!soundEnabled || volumePercent <= 0) {
             return;
         }
         Thread thread = new Thread(() -> {
-            Playback playback = prepare(volumePercent);
+            Playback playback = prepare(reaction, volumePercent);
             if (playback != null) {
                 playback.start();
             }
-        }, "cat-clapping-audio");
+        }, "cat-clapping-audio-" + reaction.name().toLowerCase(Locale.ROOT));
         thread.setDaemon(true);
         thread.start();
     }
 
     /**
-     * Opens the audio line for the given volume (0..100). May block; call off the EDT.
+     * Opens the audio line for the given reaction and volume (0..100). May block; call off the EDT.
      */
-    public static Playback prepare(int volumePercent) {
+    public static Playback prepare(CatReaction reaction, int volumePercent) {
+        Objects.requireNonNull(reaction, "reaction");
         int clamped = Math.max(0, Math.min(100, volumePercent));
         double volume = clamped / 100.0;
         if (volume <= 0.0) {
             return null;
         }
-        Clip clip = openClip(volume);
-        return new Playback(clip, volume);
+        Clip clip = openClip(reaction, volume);
+        return new Playback(reaction, clip, volume);
     }
 
     public static final class Playback {
+        private final CatReaction reaction;
         private final Clip clip;
         private final double volume;
         private volatile long startNanos = -1L;
@@ -72,7 +77,8 @@ public final class SoundPlayer {
         private volatile long lastClipMs;
         private volatile Process activeProcess;
 
-        private Playback(Clip clip, double volume) {
+        private Playback(CatReaction reaction, Clip clip, double volume) {
+            this.reaction = reaction;
             this.clip = clip;
             this.volume = volume;
         }
@@ -84,8 +90,8 @@ public final class SoundPlayer {
             }
             startNanos = System.nanoTime();
             Thread thread = new Thread(
-                    clip != null ? this::runClip : () -> playViaOsFallback(volume, this),
-                    "cat-clapping-audio");
+                    clip != null ? this::runClip : () -> playViaOsFallback(reaction, volume, this),
+                    "cat-clapping-audio-" + reaction.name().toLowerCase(Locale.ROOT));
             thread.setDaemon(true);
             thread.start();
         }
@@ -146,10 +152,11 @@ public final class SoundPlayer {
         }
     }
 
-    private static Clip openClip(double volume) {
-        try (InputStream raw = SoundPlayer.class.getResourceAsStream(AUDIO_RESOURCE)) {
+    private static Clip openClip(CatReaction reaction, double volume) {
+        String audioResource = reaction.audioResource();
+        try (InputStream raw = SoundPlayer.class.getResourceAsStream(audioResource)) {
             if (raw == null) {
-                LOG.warn("Audio resource not found: " + AUDIO_RESOURCE);
+                LOG.warn("Audio resource not found: " + audioResource);
                 return null;
             }
             try (BufferedInputStream buffered = new BufferedInputStream(raw);
@@ -181,9 +188,9 @@ public final class SoundPlayer {
         }
     }
 
-    private static void playViaOsFallback(double volume, Playback playback) {
+    private static void playViaOsFallback(CatReaction reaction, double volume, Playback playback) {
         try {
-            Path audioFile = ensureTempAudioFile();
+            Path audioFile = ensureTempAudioFile(reaction);
             if (audioFile == null || playback.finished) {
                 return;
             }
@@ -231,18 +238,21 @@ public final class SoundPlayer {
         }
     }
 
-    private static synchronized Path ensureTempAudioFile() throws IOException {
-        if (cachedTempAudioFile != null && Files.exists(cachedTempAudioFile)) {
-            return cachedTempAudioFile;
+    private static synchronized Path ensureTempAudioFile(CatReaction reaction) throws IOException {
+        Path existing = CACHED_TEMP_AUDIO_FILES.get(reaction);
+        if (existing != null && Files.exists(existing)) {
+            return existing;
         }
-        try (InputStream raw = SoundPlayer.class.getResourceAsStream(AUDIO_RESOURCE)) {
+        String audioResource = reaction.audioResource();
+        try (InputStream raw = SoundPlayer.class.getResourceAsStream(audioResource)) {
             if (raw == null) {
                 return null;
             }
-            Path tempFile = Files.createTempFile("cat-clapping-", ".wav");
+            Path tempFile = Files.createTempFile(
+                    "cat-clapping-" + reaction.name().toLowerCase(Locale.ROOT) + "-", ".wav");
             tempFile.toFile().deleteOnExit();
             Files.copy(raw, tempFile, StandardCopyOption.REPLACE_EXISTING);
-            cachedTempAudioFile = tempFile;
+            CACHED_TEMP_AUDIO_FILES.put(reaction, tempFile);
             return tempFile;
         }
     }

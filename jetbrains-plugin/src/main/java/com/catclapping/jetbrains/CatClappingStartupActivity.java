@@ -2,6 +2,8 @@ package com.catclapping.jetbrains;
 
 import com.intellij.build.BuildViewManager;
 import com.intellij.build.events.BuildEvent;
+import com.intellij.build.events.EventResult;
+import com.intellij.build.events.FailureResult;
 import com.intellij.build.events.FinishBuildEvent;
 import com.intellij.build.events.SuccessResult;
 import com.intellij.execution.ExecutionListener;
@@ -49,7 +51,14 @@ public final class CatClappingStartupActivity implements ProjectActivity {
                             @NotNull ExecutionEnvironment env,
                             @NotNull ProcessHandler handler,
                             int exitCode) {
-                        if (exitCode != 0) {
+                        CatReaction reaction = exitCode == 0
+                                ? CatReaction.CLAPPING
+                                : (CommandMatcher.isErrorExitCode(exitCode) ? CatReaction.HUH : null);
+                        if (reaction == null) {
+                            return;
+                        }
+                        CatClappingSettings settings = CatClappingSettings.getInstance();
+                        if (!settings.isEnabled(reaction)) {
                             return;
                         }
                         RunProfile profile = env.getRunProfile();
@@ -62,8 +71,8 @@ public final class CatClappingStartupActivity implements ProjectActivity {
                                 profileName,
                                 configTypeId,
                                 isDebug,
-                                CatClappingSettings.getInstance().getEnabledCommands())) {
-                            celebrationService.celebrate();
+                                settings.getEnabledCommands(reaction))) {
+                            celebrationService.trigger(reaction);
                         }
                     }
                 });
@@ -73,11 +82,22 @@ public final class CatClappingStartupActivity implements ProjectActivity {
             BuildViewManager buildViewManager = project.getService(BuildViewManager.class);
             if (buildViewManager != null) {
                 buildViewManager.addListener((Object buildId, BuildEvent event) -> {
-                    if (event instanceof FinishBuildEvent finishEvent
-                            && finishEvent.getResult() instanceof SuccessResult
-                            && CommandMatcher.isBuildEnabled(
-                                    CatClappingSettings.getInstance().getEnabledCommands())) {
-                        celebrationService.celebrate();
+                    if (!(event instanceof FinishBuildEvent finishEvent)) {
+                        return;
+                    }
+                    EventResult result = finishEvent.getResult();
+                    CatReaction reaction;
+                    if (result instanceof SuccessResult) {
+                        reaction = CatReaction.CLAPPING;
+                    } else if (result instanceof FailureResult) {
+                        reaction = CatReaction.HUH;
+                    } else {
+                        return;
+                    }
+                    CatClappingSettings settings = CatClappingSettings.getInstance();
+                    if (settings.isEnabled(reaction)
+                            && CommandMatcher.isBuildEnabled(settings.getEnabledCommands(reaction))) {
+                        celebrationService.trigger(reaction);
                     }
                 }, celebrationService);
             }
