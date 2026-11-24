@@ -115,7 +115,22 @@ public final class CommandMatcher {
             Pattern.compile("\\bsfdx\\s+force:source:deploy\\b")
     );
 
+    private static final int EXIT_SIGINT = 130;
+    private static final int EXIT_SIGTERM = 143;
+    private static final int EXIT_WIN_CTRL_C = 0xC000013A;
+
     private CommandMatcher() {
+    }
+
+    /**
+     * Returns true when a process exit code represents a real error or crash,
+     * ignoring exit code 0 and manual cancellation signals (SIGINT, SIGTERM, Windows Ctrl+C).
+     */
+    public static boolean isErrorExitCode(int exitCode) {
+        return exitCode != 0
+                && exitCode != EXIT_SIGINT
+                && exitCode != EXIT_SIGTERM
+                && exitCode != EXIT_WIN_CTRL_C;
     }
 
     public static List<SupportedCommand> supportedCommands() {

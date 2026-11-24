@@ -15,14 +15,18 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Iterator;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.LongSupplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Decodes the clapping GIF frame by frame on a background thread, scaled to the requested size.
+ * Decodes a reaction GIF frame by frame on a background thread, scaled to the requested size.
  * <p>
  * Unlike AWT's built-in GIF animation (which sleeps the frame delay <em>after</em> decoding each frame
  * and therefore drifts), frames are tagged with their exact start time so the overlay can show the frame
@@ -31,13 +35,13 @@ import java.util.logging.Logger;
 final class CatAnimation {
 
     private static final Logger LOG = Logger.getLogger(CatAnimation.class.getName());
-    private static final String GIF_RESOURCE = "/media/cat-clapping.gif";
+    private static final String GIF_STREAM_METADATA_FORMAT = "javax_imageio_gif_stream_1.0";
     private static final String GIF_METADATA_FORMAT = "javax_imageio_gif_image_1.0";
     private static final int QUEUE_CAPACITY = 8;
 
-    private static volatile byte[] cachedGifBytes;
-    private static volatile int[] cachedRawSize;
-    private static volatile BufferedImage cachedFirstFramePreview;
+    private static final Map<CatReaction, byte[]> CACHED_GIF_BYTES = new ConcurrentHashMap<>();
+    private static final Map<CatReaction, int[]> CACHED_RAW_SIZE = new ConcurrentHashMap<>();
+    private static final Map<CatReaction, BufferedImage> CACHED_FIRST_FRAME_PREVIEW = new ConcurrentHashMap<>();
 
     static final class Frame {
         final BufferedImage image;
@@ -51,6 +55,9 @@ final class CatAnimation {
         }
     }
 
+    private final CatReaction reaction;
+    private final long clipStartMs;
+    private final long clipEndMs;
     private final BlockingQueue<Frame> queue = new ArrayBlockingQueue<>(QUEUE_CAPACITY);
     private final int pixelWidth;
     private final int pixelHeight;
@@ -60,15 +67,38 @@ final class CatAnimation {
     private volatile boolean failed;
 
     /**
+     * @param reaction    which cat reaction GIF to decode
      * @param pixelWidth  width of produced frames in device pixels
      * @param pixelHeight height of produced frames in device pixels
      * @param clockMs     current playback position in ms, or a negative value while not started yet
      */
-    CatAnimation(int pixelWidth, int pixelHeight, LongSupplier clockMs) {
+    CatAnimation(CatReaction reaction, int pixelWidth, int pixelHeight, LongSupplier clockMs) {
+        this(reaction, 0L, -1L, pixelWidth, pixelHeight, clockMs);
+    }
+
+    /**
+     * @param reaction    which cat reaction GIF to decode
+     * @param clipStartMs start offset within the GIF in ms (inclusive)
+     * @param clipEndMs   end offset within the GIF in ms (exclusive), or &lt;= clipStartMs for the full GIF
+     * @param pixelWidth  width of produced frames in device pixels
+     * @param pixelHeight height of produced frames in device pixels
+     * @param clockMs     current playback position in ms, or a negative value while not started yet
+     */
+    CatAnimation(
+            CatReaction reaction,
+            long clipStartMs,
+            long clipEndMs,
+            int pixelWidth,
+            int pixelHeight,
+            LongSupplier clockMs) {
+        this.reaction = Objects.requireNonNull(reaction, "reaction");
+        this.clipStartMs = Math.max(0L, clipStartMs);
+        this.clipEndMs = clipEndMs > this.clipStartMs ? clipEndMs : -1L;
         this.pixelWidth = Math.max(pixelWidth, 1);
         this.pixelHeight = Math.max(pixelHeight, 1);
         this.clockMs = clockMs;
-        this.thread = new Thread(this::decodeLoop, "cat-clapping-gif-decoder");
+        this.thread = new Thread(this::decodeLoop,
+                "cat-clapping-gif-decoder-" + reaction.name().toLowerCase(Locale.ROOT));
         this.thread.setDaemon(true);
     }
 
@@ -102,13 +132,14 @@ final class CatAnimation {
         return failed;
     }
 
-    /** Cached downscaled first GIF frame for the settings position preview, or null on failure. */
-    static BufferedImage firstFramePreview() {
-        BufferedImage cached = cachedFirstFramePreview;
+    /** Cached downscaled preview frame for the settings position preview, or null on failure. */
+    static BufferedImage firstFramePreview(CatReaction reaction) {
+        Objects.requireNonNull(reaction, "reaction");
+        BufferedImage cached = CACHED_FIRST_FRAME_PREVIEW.get(reaction);
         if (cached != null) {
             return cached;
         }
-        byte[] bytes = gifBytes();
+        byte[] bytes = gifBytes(reaction);
         if (bytes == null) {
             return null;
         }
@@ -116,14 +147,41 @@ final class CatAnimation {
         try (ImageInputStream in = ImageIO.createImageInputStream(new ByteArrayInputStream(bytes))) {
             reader = gifReader();
             reader.setInput(in, false);
-            BufferedImage raw = reader.read(0);
+            int[] canvasDim = canvasSize(reader);
+            int canvasW = canvasDim[0];
+            int canvasH = canvasDim[1];
+            int targetFrame = Math.max(0, reaction.previewFrameIndex());
+            BufferedImage canvas = new BufferedImage(canvasW, canvasH, BufferedImage.TYPE_INT_ARGB);
+            Graphics2D canvasG = canvas.createGraphics();
+            boolean hasAnyFrame = false;
+            try {
+                for (int index = 0; index <= targetFrame; index++) {
+                    BufferedImage patch;
+                    try {
+                        patch = reader.read(index);
+                    } catch (IndexOutOfBoundsException end) {
+                        break;
+                    }
+                    hasAnyFrame = true;
+                    FrameInfo info = FrameInfo.read(reader.getImageMetadata(index));
+                    BufferedImage previous = drawPatch(canvas, canvasG, patch, info);
+                    if (index < targetFrame) {
+                        applyDisposal(canvasG, info, previous);
+                    }
+                }
+            } finally {
+                canvasG.dispose();
+            }
+            if (!hasAnyFrame) {
+                return null;
+            }
             int targetH = 220;
-            int targetW = Math.max(1, (int) Math.round(raw.getWidth() * ((double) targetH / Math.max(1, raw.getHeight()))));
-            BufferedImage scaled = draw(raw, targetW, targetH);
-            cachedFirstFramePreview = scaled;
-            return scaled;
+            int targetW = Math.max(1, (int) Math.round(canvasW * ((double) targetH / Math.max(1, canvasH))));
+            BufferedImage scaled = draw(canvas, targetW, targetH);
+            CACHED_FIRST_FRAME_PREVIEW.putIfAbsent(reaction, scaled);
+            return CACHED_FIRST_FRAME_PREVIEW.get(reaction);
         } catch (Exception e) {
-            LOG.log(Level.WARNING, "Could not read preview GIF frame", e);
+            LOG.log(Level.WARNING, "Could not read preview GIF frame for " + reaction, e);
             return null;
         } finally {
             if (reader != null) {
@@ -133,17 +191,18 @@ final class CatAnimation {
     }
 
     /** Returns already-cached GIF size {width, height} without reading or decoding, or null. */
-    static int[] cachedRawSize() {
-        return cachedRawSize;
+    static int[] cachedRawSize(CatReaction reaction) {
+        return CACHED_RAW_SIZE.get(Objects.requireNonNull(reaction, "reaction"));
     }
 
     /** Raw GIF size {width, height}, or null if it cannot be read. */
-    static int[] rawSize() {
-        int[] size = cachedRawSize;
+    static int[] rawSize(CatReaction reaction) {
+        Objects.requireNonNull(reaction, "reaction");
+        int[] size = CACHED_RAW_SIZE.get(reaction);
         if (size != null) {
             return size;
         }
-        byte[] bytes = gifBytes();
+        byte[] bytes = gifBytes(reaction);
         if (bytes == null) {
             return null;
         }
@@ -151,11 +210,11 @@ final class CatAnimation {
         try (ImageInputStream in = ImageIO.createImageInputStream(new ByteArrayInputStream(bytes))) {
             reader = gifReader();
             reader.setInput(in, false);
-            size = new int[]{reader.getWidth(0), reader.getHeight(0)};
-            cachedRawSize = size;
-            return size;
+            size = canvasSize(reader);
+            CACHED_RAW_SIZE.putIfAbsent(reaction, size);
+            return CACHED_RAW_SIZE.get(reaction);
         } catch (Exception e) {
-            LOG.log(Level.WARNING, "Could not read GIF size", e);
+            LOG.log(Level.WARNING, "Could not read GIF size for " + reaction, e);
             return null;
         } finally {
             if (reader != null) {
@@ -164,25 +223,29 @@ final class CatAnimation {
         }
     }
 
-    static byte[] gifBytes() {
-        byte[] bytes = cachedGifBytes;
+    static byte[] gifBytes(CatReaction reaction) {
+        Objects.requireNonNull(reaction, "reaction");
+        byte[] bytes = CACHED_GIF_BYTES.get(reaction);
         if (bytes != null) {
             return bytes;
         }
         synchronized (CatAnimation.class) {
-            if (cachedGifBytes == null) {
-                try (InputStream raw = CatAnimation.class.getResourceAsStream(GIF_RESOURCE)) {
+            bytes = CACHED_GIF_BYTES.get(reaction);
+            if (bytes == null) {
+                String resource = reaction.gifResource();
+                try (InputStream raw = CatAnimation.class.getResourceAsStream(resource)) {
                     if (raw == null) {
-                        LOG.warning("GIF resource not found: " + GIF_RESOURCE);
+                        LOG.warning("GIF resource not found: " + resource);
                         return null;
                     }
-                    cachedGifBytes = raw.readAllBytes();
+                    bytes = raw.readAllBytes();
+                    CACHED_GIF_BYTES.put(reaction, bytes);
                 } catch (IOException e) {
-                    LOG.log(Level.WARNING, "Could not load GIF resource", e);
+                    LOG.log(Level.WARNING, "Could not load GIF resource: " + resource, e);
                     return null;
                 }
             }
-            return cachedGifBytes;
+            return bytes;
         }
     }
 
@@ -194,8 +257,30 @@ final class CatAnimation {
         return readers.next();
     }
 
+    private static int[] canvasSize(ImageReader reader) throws IOException {
+        IIOMetadata streamMetadata = reader.getStreamMetadata();
+        if (streamMetadata != null) {
+            try {
+                Node root = streamMetadata.getAsTree(GIF_STREAM_METADATA_FORMAT);
+                for (Node child = root.getFirstChild(); child != null; child = child.getNextSibling()) {
+                    if ("LogicalScreenDescriptor".equals(child.getNodeName())) {
+                        NamedNodeMap attrs = child.getAttributes();
+                        int w = FrameInfo.intAttr(attrs, "logicalScreenWidth", 0);
+                        int h = FrameInfo.intAttr(attrs, "logicalScreenHeight", 0);
+                        if (w > 0 && h > 0) {
+                            return new int[]{w, h};
+                        }
+                    }
+                }
+            } catch (IllegalArgumentException ignored) {
+                // Fall back to frame 0 size if stream metadata tree is unavailable.
+            }
+        }
+        return new int[]{reader.getWidth(0), reader.getHeight(0)};
+    }
+
     private void decodeLoop() {
-        byte[] bytes = gifBytes();
+        byte[] bytes = gifBytes(reaction);
         if (bytes == null) {
             failed = true;
             finished = true;
@@ -205,8 +290,9 @@ final class CatAnimation {
         try (ImageInputStream in = ImageIO.createImageInputStream(new ByteArrayInputStream(bytes))) {
             reader = gifReader();
             reader.setInput(in, false);
-            int canvasW = reader.getWidth(0);
-            int canvasH = reader.getHeight(0);
+            int[] canvasDim = canvasSize(reader);
+            int canvasW = canvasDim[0];
+            int canvasH = canvasDim[1];
             BufferedImage canvas = new BufferedImage(canvasW, canvasH, BufferedImage.TYPE_INT_ARGB);
             Graphics2D canvasG = canvas.createGraphics();
             try {
@@ -219,32 +305,28 @@ final class CatAnimation {
                         break;
                     }
                     FrameInfo info = FrameInfo.read(reader.getImageMetadata(index));
+                    long rawStartMs = timeMs;
+                    long rawEndMs = timeMs + info.delayMs;
+                    timeMs = rawEndMs;
 
-                    BufferedImage previous = null;
-                    if ("restoreToPrevious".equals(info.disposal)) {
-                        previous = copyRegion(canvas, info);
-                    }
-                    canvasG.setComposite(AlphaComposite.SrcOver);
-                    canvasG.drawImage(patch, info.left, info.top, null);
-
-                    long startMs = timeMs;
-                    long endMs = timeMs + info.delayMs;
-                    timeMs = endMs;
-
-                    long now = clockMs.getAsLong();
-                    boolean late = now >= 0 && endMs <= now;
-                    if (!late) {
-                        queue.put(new Frame(scale(canvas), startMs, endMs));
+                    if (clipEndMs > 0 && rawStartMs >= clipEndMs) {
+                        break;
                     }
 
-                    // Apply disposal for the next frame.
-                    if ("restoreToBackgroundColor".equals(info.disposal)) {
-                        canvasG.setComposite(AlphaComposite.Clear);
-                        canvasG.fillRect(info.left, info.top, info.width, info.height);
-                    } else if (previous != null) {
-                        canvasG.setComposite(AlphaComposite.Src);
-                        canvasG.drawImage(previous, info.left, info.top, null);
+                    BufferedImage previous = drawPatch(canvas, canvasG, patch, info);
+
+                    if (rawEndMs > clipStartMs) {
+                        long shiftedStartMs = Math.max(0L, rawStartMs - clipStartMs);
+                        long clippedEndMs = clipEndMs > 0 ? Math.min(rawEndMs, clipEndMs) : rawEndMs;
+                        long shiftedEndMs = Math.max(shiftedStartMs, clippedEndMs - clipStartMs);
+                        long now = clockMs.getAsLong();
+                        boolean late = now >= 0 && shiftedEndMs <= now;
+                        if (!late) {
+                            queue.put(new Frame(scale(canvas), shiftedStartMs, shiftedEndMs));
+                        }
                     }
+
+                    applyDisposal(canvasG, info, previous);
                 }
             } finally {
                 canvasG.dispose();
@@ -252,13 +334,37 @@ final class CatAnimation {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } catch (Exception e) {
-            LOG.log(Level.WARNING, "GIF decoding failed", e);
+            LOG.log(Level.WARNING, "GIF decoding failed for " + reaction, e);
             failed = true;
         } finally {
             if (reader != null) {
                 reader.dispose();
             }
             finished = true;
+        }
+    }
+
+    private static BufferedImage drawPatch(
+            BufferedImage canvas,
+            Graphics2D canvasG,
+            BufferedImage patch,
+            FrameInfo info) {
+        BufferedImage previous = null;
+        if ("restoreToPrevious".equals(info.disposal)) {
+            previous = copyRegion(canvas, info);
+        }
+        canvasG.setComposite(AlphaComposite.SrcOver);
+        canvasG.drawImage(patch, info.left, info.top, null);
+        return previous;
+    }
+
+    private static void applyDisposal(Graphics2D canvasG, FrameInfo info, BufferedImage previous) {
+        if ("restoreToBackgroundColor".equals(info.disposal)) {
+            canvasG.setComposite(AlphaComposite.Clear);
+            canvasG.fillRect(info.left, info.top, info.width, info.height);
+        } else if (previous != null) {
+            canvasG.setComposite(AlphaComposite.Src);
+            canvasG.drawImage(previous, info.left, info.top, null);
         }
     }
 
