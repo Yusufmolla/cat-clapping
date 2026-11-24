@@ -192,6 +192,7 @@ public final class CatClappingConfigurable implements SearchableConfigurable {
         private final List<String> customCommands = new ArrayList<>();
         private JTextField customCommandField;
         private JPanel customCommandsContainer;
+        private JComboBox<HuhClipMode> huhClipModeCombo;
         private JCheckBox soundCheckBox;
         private JSlider volumeSlider;
         private JLabel volumeValueLabel;
@@ -213,6 +214,22 @@ public final class CatClappingConfigurable implements SearchableConfigurable {
             form.add(Box.createVerticalStrut(10));
             form.add(buildCustomCommandsSection());
             form.add(Box.createVerticalStrut(12));
+
+            if (reaction == CatReaction.HUH) {
+                JPanel clipRow = new JPanel(new BorderLayout(8, 0));
+                JLabel clipLabel = new JLabel("HUH clip:");
+                clipLabel.setPreferredSize(new Dimension(130, clipLabel.getPreferredSize().height));
+                clipRow.add(clipLabel, BorderLayout.WEST);
+
+                huhClipModeCombo = new JComboBox<>(HuhClipMode.values());
+                JPanel comboWrap = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+                comboWrap.add(huhClipModeCombo);
+                clipRow.add(comboWrap, BorderLayout.CENTER);
+                clipRow.setMaximumSize(new Dimension(560, huhClipModeCombo.getPreferredSize().height + 6));
+                clipRow.setAlignmentX(JComponent.LEFT_ALIGNMENT);
+                form.add(clipRow);
+                form.add(Box.createVerticalStrut(8));
+            }
 
             String soundLabel = reaction == CatReaction.HUH
                     ? "Play error sound"
@@ -514,13 +531,28 @@ public final class CatClappingConfigurable implements SearchableConfigurable {
                     ? selected
                     : CatAnchor.WINDOW;
 
+            long clipStartMs = 0L;
+            long clipEndMs = -1L;
+            if (reaction == CatReaction.HUH) {
+                HuhClipMode mode = selectedHuhClipMode();
+                clipStartMs = mode.clipStartMs();
+                clipEndMs = mode.clipEndMs();
+            }
+
             Project target = findActiveProject();
             if (target != null) {
                 CelebrationService.getInstance(target)
-                        .triggerPreview(reaction, soundEnabled, volume, size, posX, posY, anchor);
+                        .triggerPreview(reaction, clipStartMs, clipEndMs, soundEnabled, volume, size, posX, posY, anchor);
             } else {
-                SoundPlayer.play(reaction, soundEnabled, volume);
+                SoundPlayer.play(reaction, clipStartMs, clipEndMs, soundEnabled, volume);
             }
+        }
+
+        private HuhClipMode selectedHuhClipMode() {
+            if (huhClipModeCombo != null && huhClipModeCombo.getSelectedItem() instanceof HuhClipMode selected) {
+                return selected;
+            }
+            return HuhClipMode.SECOND_HUH;
         }
 
         private List<String> collectSelectedCommands(boolean includePendingInput) {
@@ -556,6 +588,7 @@ public final class CatClappingConfigurable implements SearchableConfigurable {
             Set<String> savedSelection = new LinkedHashSet<>(
                     CommandMatcher.resolveCommandSelection(settings.getEnabledCommands(reaction)));
             return !currentSelection.equals(savedSelection)
+                    || (huhClipModeCombo != null && huhClipModeCombo.getSelectedItem() != settings.getHuhClipMode())
                     || soundCheckBox.isSelected() != settings.isSoundEnabled(reaction)
                     || volumeSlider.getValue() != settings.getVolumePercent(reaction)
                     || sizeSlider.getValue() != settings.getCatSizePx(reaction)
@@ -567,6 +600,9 @@ public final class CatClappingConfigurable implements SearchableConfigurable {
         void apply(CatClappingSettings settings) {
             addCustomCommandsFromInput();
             settings.setEnabledCommands(reaction, collectSelectedCommands(false));
+            if (huhClipModeCombo != null && huhClipModeCombo.getSelectedItem() instanceof HuhClipMode mode) {
+                settings.setHuhClipMode(mode);
+            }
             settings.setSoundEnabled(reaction, soundCheckBox.isSelected());
             settings.setVolumePercent(reaction, volumeSlider.getValue());
             settings.setCatSizePx(reaction, sizeSlider.getValue());
@@ -595,6 +631,9 @@ public final class CatClappingConfigurable implements SearchableConfigurable {
             }
             rebuildCustomCommandsPanel();
 
+            if (huhClipModeCombo != null) {
+                huhClipModeCombo.setSelectedItem(settings.getHuhClipMode());
+            }
             soundCheckBox.setSelected(settings.isSoundEnabled(reaction));
             volumeSlider.setValue(settings.getVolumePercent(reaction));
             volumeValueLabel.setText(volumeSlider.getValue() + " %");

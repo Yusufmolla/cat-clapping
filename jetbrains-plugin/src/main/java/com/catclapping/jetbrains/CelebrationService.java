@@ -38,8 +38,12 @@ public final class CelebrationService implements Disposable {
         if (!settings.isEnabled(reaction)) {
             return;
         }
+        long clipStartMs = reaction == CatReaction.HUH ? settings.getHuhClipMode().clipStartMs() : 0L;
+        long clipEndMs = reaction == CatReaction.HUH ? settings.getHuhClipMode().clipEndMs() : -1L;
         triggerInternal(
                 reaction,
+                clipStartMs,
+                clipEndMs,
                 false,
                 settings.isSoundEnabled(reaction),
                 settings.getVolumePercent(reaction),
@@ -51,6 +55,8 @@ public final class CelebrationService implements Disposable {
 
     void triggerPreview(
             CatReaction reaction,
+            long clipStartMs,
+            long clipEndMs,
             boolean soundEnabled,
             int volumePercent,
             int catSizePx,
@@ -58,11 +64,23 @@ public final class CelebrationService implements Disposable {
             double catPosY,
             CatAnchor catAnchor) {
         Objects.requireNonNull(reaction, "reaction");
-        triggerInternal(reaction, true, soundEnabled, volumePercent, catSizePx, catPosX, catPosY, catAnchor);
+        triggerInternal(
+                reaction,
+                clipStartMs,
+                clipEndMs,
+                true,
+                soundEnabled,
+                volumePercent,
+                catSizePx,
+                catPosX,
+                catPosY,
+                catAnchor);
     }
 
     private void triggerInternal(
             CatReaction reaction,
+            long clipStartMs,
+            long clipEndMs,
             boolean ignoreCooldown,
             boolean soundEnabled,
             int volumePercent,
@@ -91,7 +109,9 @@ public final class CelebrationService implements Disposable {
                 return;
             }
             CatAnimation.rawSize(reaction);
-            SoundPlayer.Playback playback = soundEnabled ? SoundPlayer.prepare(reaction, volumePercent) : null;
+            SoundPlayer.Playback playback = soundEnabled
+                    ? SoundPlayer.prepare(reaction, clipStartMs, clipEndMs, volumePercent)
+                    : null;
             ApplicationManager.getApplication().invokeLater(() -> {
                 if (isDisposed()) {
                     if (playback != null) {
@@ -107,6 +127,8 @@ public final class CelebrationService implements Disposable {
                 Runnable cleanup = CatOverlay.showOverlay(
                         project,
                         reaction,
+                        clipStartMs,
+                        clipEndMs,
                         playback,
                         catSizePx,
                         catPosX,

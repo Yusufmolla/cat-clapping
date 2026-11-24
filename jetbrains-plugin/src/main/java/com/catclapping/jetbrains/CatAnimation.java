@@ -56,6 +56,8 @@ final class CatAnimation {
     }
 
     private final CatReaction reaction;
+    private final long clipStartMs;
+    private final long clipEndMs;
     private final BlockingQueue<Frame> queue = new ArrayBlockingQueue<>(QUEUE_CAPACITY);
     private final int pixelWidth;
     private final int pixelHeight;
@@ -71,7 +73,27 @@ final class CatAnimation {
      * @param clockMs     current playback position in ms, or a negative value while not started yet
      */
     CatAnimation(CatReaction reaction, int pixelWidth, int pixelHeight, LongSupplier clockMs) {
+        this(reaction, 0L, -1L, pixelWidth, pixelHeight, clockMs);
+    }
+
+    /**
+     * @param reaction    which cat reaction GIF to decode
+     * @param clipStartMs start offset within the GIF in ms (inclusive)
+     * @param clipEndMs   end offset within the GIF in ms (exclusive), or &lt;= clipStartMs for the full GIF
+     * @param pixelWidth  width of produced frames in device pixels
+     * @param pixelHeight height of produced frames in device pixels
+     * @param clockMs     current playback position in ms, or a negative value while not started yet
+     */
+    CatAnimation(
+            CatReaction reaction,
+            long clipStartMs,
+            long clipEndMs,
+            int pixelWidth,
+            int pixelHeight,
+            LongSupplier clockMs) {
         this.reaction = Objects.requireNonNull(reaction, "reaction");
+        this.clipStartMs = Math.max(0L, clipStartMs);
+        this.clipEndMs = clipEndMs > this.clipStartMs ? clipEndMs : -1L;
         this.pixelWidth = Math.max(pixelWidth, 1);
         this.pixelHeight = Math.max(pixelHeight, 1);
         this.clockMs = clockMs;
@@ -283,16 +305,25 @@ final class CatAnimation {
                         break;
                     }
                     FrameInfo info = FrameInfo.read(reader.getImageMetadata(index));
+                    long rawStartMs = timeMs;
+                    long rawEndMs = timeMs + info.delayMs;
+                    timeMs = rawEndMs;
+
+                    if (clipEndMs > 0 && rawStartMs >= clipEndMs) {
+                        break;
+                    }
+
                     BufferedImage previous = drawPatch(canvas, canvasG, patch, info);
 
-                    long startMs = timeMs;
-                    long endMs = timeMs + info.delayMs;
-                    timeMs = endMs;
-
-                    long now = clockMs.getAsLong();
-                    boolean late = now >= 0 && endMs <= now;
-                    if (!late) {
-                        queue.put(new Frame(scale(canvas), startMs, endMs));
+                    if (rawEndMs > clipStartMs) {
+                        long shiftedStartMs = Math.max(0L, rawStartMs - clipStartMs);
+                        long clippedEndMs = clipEndMs > 0 ? Math.min(rawEndMs, clipEndMs) : rawEndMs;
+                        long shiftedEndMs = Math.max(shiftedStartMs, clippedEndMs - clipStartMs);
+                        long now = clockMs.getAsLong();
+                        boolean late = now >= 0 && shiftedEndMs <= now;
+                        if (!late) {
+                            queue.put(new Frame(scale(canvas), shiftedStartMs, shiftedEndMs));
+                        }
                     }
 
                     applyDisposal(canvasG, info, previous);

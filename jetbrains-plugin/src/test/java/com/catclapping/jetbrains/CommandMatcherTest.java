@@ -203,8 +203,14 @@ public final class CommandMatcherTest {
         int[] huhSize = CatAnimation.rawSize(CatReaction.HUH);
         assertTrue(huhSize[0] == 404 && huhSize[1] == 540);
 
-        // Full frame-by-frame decode check for cat-huh.gif
-        verifyFullDecode(CatReaction.HUH, 202, 270, 105);
+        // HUH clip mode metadata & sliced GIF frame decoding checks
+        assertTrue(HuhClipMode.SECOND_HUH.clipStartMs() == 3950L && HuhClipMode.SECOND_HUH.clipEndMs() == 5250L);
+        assertTrue(HuhClipMode.FIRST_HUH.clipStartMs() == 0L && HuhClipMode.FIRST_HUH.clipEndMs() == 1500L);
+        assertTrue(HuhClipMode.FULL.clipStartMs() == 0L && HuhClipMode.FULL.clipEndMs() < 0L);
+
+        verifyFullDecode(CatReaction.HUH, HuhClipMode.SECOND_HUH, 202, 270, 26, 1300L);
+        verifyFullDecode(CatReaction.HUH, HuhClipMode.FIRST_HUH, 202, 270, 30, 1500L);
+        verifyFullDecode(CatReaction.HUH, HuhClipMode.FULL, 202, 270, 105, 5250L);
 
         System.out.println("All CommandMatcherTest assertions passed!");
     }
@@ -226,18 +232,27 @@ public final class CommandMatcherTest {
 
     private static void verifyFullDecode(
             CatReaction reaction,
+            HuhClipMode mode,
             int targetW,
             int targetH,
-            int expectedFrames) throws InterruptedException {
-        CatAnimation anim = new CatAnimation(reaction, targetW, targetH, () -> 0L);
+            int expectedFrames,
+            long expectedTotalDurationMs) throws InterruptedException {
+        CatAnimation anim = new CatAnimation(
+                reaction, mode.clipStartMs(), mode.clipEndMs(), targetW, targetH, () -> 0L);
         anim.start();
         int count = 0;
+        long firstStartMs = -1L;
+        long lastEndMs = -1L;
         long deadlineNanos = System.nanoTime() + 15_000_000_000L;
         while (!(anim.isFinished() && anim.peek() == null)) {
             CatAnimation.Frame frame = anim.poll();
             if (frame != null) {
                 assertTrue(frame.image != null);
                 assertTrue(frame.image.getWidth() == targetW && frame.image.getHeight() == targetH);
+                if (firstStartMs < 0) {
+                    firstStartMs = frame.startMs;
+                }
+                lastEndMs = frame.endMs;
                 count++;
             } else {
                 assertTrue(System.nanoTime() < deadlineNanos);
@@ -246,6 +261,8 @@ public final class CommandMatcherTest {
         }
         assertTrue(!anim.isFailed());
         assertTrue(count == expectedFrames);
+        assertTrue(firstStartMs == 0L);
+        assertTrue(lastEndMs == expectedTotalDurationMs);
     }
 
     private static void assertHasOpaquePixels(BufferedImage img) {

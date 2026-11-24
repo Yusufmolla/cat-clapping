@@ -5,7 +5,7 @@ package com.catclapping.jetbrains;
  */
 public enum CatReaction {
     CLAPPING("Clapping Cat", "/media/cat-clapping.gif", "/media/cat-clapping.wav", 520, 576, 1024, 0),
-    HUH("HUH Cat", "/media/cat-huh.gif", "/media/cat-huh.wav", 320, 404, 540, 17);
+    HUH("HUH Cat", "/media/cat-huh.gif", "/media/cat-huh.wav", 320, 404, 540, 92);
 
     private final String displayName;
     private final String gifResource;

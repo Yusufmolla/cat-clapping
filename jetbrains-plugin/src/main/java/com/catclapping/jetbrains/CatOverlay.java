@@ -44,6 +44,8 @@ public final class CatOverlay {
     static Runnable showOverlay(
             Project project,
             CatReaction reaction,
+            long clipStartMs,
+            long clipEndMs,
             SoundPlayer.Playback playback,
             int desiredSizePx,
             double posX,
@@ -92,7 +94,7 @@ public final class CatOverlay {
             return start < 0 ? -1L : (System.nanoTime() - start) / 1_000_000L;
         };
 
-        CatAnimation animation = new CatAnimation(reaction, pixelW, pixelH, clockMs);
+        CatAnimation animation = new CatAnimation(reaction, clipStartMs, clipEndMs, pixelW, pixelH, clockMs);
 
         final BufferedImage[] current = {null};
         JComponent overlay = new JComponent() {

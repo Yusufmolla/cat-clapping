@@ -40,6 +40,7 @@ public final class CatClappingSettings implements PersistentStateComponent<CatCl
 
         // HUH Cat (on error) — enabled by default.
         public boolean huhEnabled = true;
+        public HuhClipMode huhClipMode = HuhClipMode.SECOND_HUH;
         public List<String> huhEnabledCommands = new ArrayList<>(CommandMatcher.supportedCommandIds());
         public boolean huhSoundEnabled = true;
         public int huhVolumePercent = DEFAULT_VOLUME_PERCENT;
@@ -79,6 +80,17 @@ public final class CatClappingSettings implements PersistentStateComponent<CatCl
         if (this.state.huhCatAnchor == null) {
             this.state.huhCatAnchor = CatAnchor.WINDOW;
         }
+        if (this.state.huhClipMode == null) {
+            this.state.huhClipMode = HuhClipMode.SECOND_HUH;
+        }
+    }
+
+    public HuhClipMode getHuhClipMode() {
+        return state.huhClipMode != null ? state.huhClipMode : HuhClipMode.SECOND_HUH;
+    }
+
+    public void setHuhClipMode(HuhClipMode mode) {
+        state.huhClipMode = mode != null ? mode : HuhClipMode.SECOND_HUH;
     }
 
     public boolean isEnabled(CatReaction reaction) {
